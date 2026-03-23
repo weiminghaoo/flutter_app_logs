@@ -8,9 +8,11 @@
 An in-app debug panel for Flutter — inspect **Console logs** and **Network requests** via a draggable floating button + bottom sheet UI, similar to [vConsole](https://github.com/niconi/vConsole) for web.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_console.png" width="280" alt="Console Tab" />
-  &nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network.png" width="280" alt="Network Tab" />
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_list.png" width="260" alt="Network request list" />
+  &nbsp;
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_detail.png" width="260" alt="Network request detail" />
+  &nbsp;
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_console.png" width="260" alt="Console logs" />
 </p>
 
 ---

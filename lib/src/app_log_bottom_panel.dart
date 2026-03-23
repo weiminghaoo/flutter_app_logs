@@ -92,10 +92,11 @@ class _BottomPanelState extends State<_BottomPanel> {
               GestureDetector(
                 onVerticalDragUpdate: _onDragUpdate,
                 onVerticalDragEnd: _onDragEnd,
-                onVerticalDragCancel: () => setState(() {
-                  _isDragging = false;
-                  _dragOffset = 0;
-                }),
+                onVerticalDragCancel:
+                    () => setState(() {
+                      _isDragging = false;
+                      _dragOffset = 0;
+                    }),
                 behavior: HitTestBehavior.opaque,
                 child: Container(
                   width: double.infinity,
@@ -196,32 +197,44 @@ class _BottomPanelState extends State<_BottomPanel> {
                         ),
                       ),
                       Expanded(
-                        child: AnimatedBuilder(
-                          animation: AppLogStore.instance,
-                          builder: (context, _) {
-                            final console = AppLogStore.instance.console;
-                            final network = AppLogStore.instance.network;
+                        // 面板关闭时不订阅 AppLogStore，避免日志写入触发不必要的 rebuild
+                        child:
+                            widget.open
+                                ? AnimatedBuilder(
+                                  animation: AppLogStore.instance,
+                                  builder: (context, _) {
+                                    final console =
+                                        AppLogStore.instance.console;
+                                    final network =
+                                        AppLogStore.instance.network;
 
-                            final resolvedSelectedId = widget.selectedNetworkId;
-                            final selected = resolvedSelectedId == null
-                                ? null
-                                : network
-                                      .where((e) => e.id == resolvedSelectedId)
-                                      .firstOrNull;
+                                    final resolvedSelectedId =
+                                        widget.selectedNetworkId;
+                                    final selected =
+                                        resolvedSelectedId == null
+                                            ? null
+                                            : network
+                                                .where(
+                                                  (e) =>
+                                                      e.id ==
+                                                      resolvedSelectedId,
+                                                )
+                                                .firstOrNull;
 
-                            return TabBarView(
-                              children: [
-                                _NetworkTab(
-                                  entries: network,
-                                  selectedId: resolvedSelectedId,
-                                  selected: selected,
-                                  onSelect: widget.onSelectNetwork,
-                                ),
-                                _ConsoleTab(entries: console),
-                              ],
-                            );
-                          },
-                        ),
+                                    return TabBarView(
+                                      children: [
+                                        _NetworkTab(
+                                          entries: network,
+                                          selectedId: resolvedSelectedId,
+                                          selected: selected,
+                                          onSelect: widget.onSelectNetwork,
+                                        ),
+                                        _ConsoleTab(entries: console),
+                                      ],
+                                    );
+                                  },
+                                )
+                                : const SizedBox.shrink(),
                       ),
                     ],
                   ),

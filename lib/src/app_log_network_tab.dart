@@ -66,18 +66,19 @@ class _NetworkTabState extends State<_NetworkTab> {
   @override
   Widget build(BuildContext context) {
     final theme = AppLogsConfig.theme;
-    final filteredEntries = widget.entries.where((e) {
-      if (_selectedMethod != null &&
-          e.method.toUpperCase() != _selectedMethod) {
-        return false;
-      }
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        return e.path.toLowerCase().contains(query) ||
-            e.method.toLowerCase().contains(query);
-      }
-      return true;
-    }).toList();
+    final filteredEntries =
+        widget.entries.where((e) {
+          if (_selectedMethod != null &&
+              e.method.toUpperCase() != _selectedMethod) {
+            return false;
+          }
+          if (_searchQuery.isNotEmpty) {
+            final query = _searchQuery.toLowerCase();
+            return e.path.toLowerCase().contains(query) ||
+                e.method.toLowerCase().contains(query);
+          }
+          return true;
+        }).toList();
 
     final isWideScreen = MediaQuery.sizeOf(context).width > 600;
 
@@ -102,15 +103,16 @@ class _NetworkTabState extends State<_NetworkTab> {
                     size: 20,
                     color: _LP.textSec,
                   ),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 16),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
-                      : null,
+                  suffixIcon:
+                      _searchQuery.isNotEmpty
+                          ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                          : null,
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -151,9 +153,10 @@ class _NetworkTabState extends State<_NetworkTab> {
                           label: method,
                           selected: _selectedMethod == method,
                           color: _methodColor(method),
-                          onSelected: (v) => setState(
-                            () => _selectedMethod = v ? method : null,
-                          ),
+                          onSelected:
+                              (v) => setState(
+                                () => _selectedMethod = v ? method : null,
+                              ),
                         ),
                       ),
                     ),
@@ -166,82 +169,86 @@ class _NetworkTabState extends State<_NetworkTab> {
 
         // 内容区
         Expanded(
-          child: filteredEntries.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No requests found',
-                    style: TextStyle(color: _LP.textSec),
-                  ),
-                )
-              : isWideScreen
-              ? Row(
-                  children: [
-                    SizedBox(
-                      width: 300,
-                      child: _buildList(filteredEntries, true),
+          child:
+              filteredEntries.isEmpty
+                  ? const Center(
+                    child: Text(
+                      'No requests found',
+                      style: TextStyle(color: _LP.textSec),
                     ),
-                    const VerticalDivider(width: 1, color: _LP.border),
-                    Expanded(
-                      child: widget.selected == null
-                          ? const Center(
-                              child: Text(
-                                'Select a request to view details',
-                                style: TextStyle(color: _LP.textSec),
-                              ),
-                            )
-                          : _NetworkDetail(entry: widget.selected!),
-                    ),
-                  ],
-                )
-              : Stack(
-                  children: [
-                    _buildList(filteredEntries, false),
-                    if (widget.selected != null)
-                      Positioned.fill(
-                        child: Container(
-                          color: _LP.bg,
-                          child: Column(
-                            children: [
-                              Container(
-                                height: 40,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                ),
-                                decoration: const BoxDecoration(
-                                  color: _LP.paper,
-                                  border: Border(
-                                    bottom: BorderSide(color: _LP.border),
+                  )
+                  : isWideScreen
+                  ? Row(
+                    children: [
+                      SizedBox(
+                        width: 300,
+                        child: _buildList(filteredEntries, true),
+                      ),
+                      const VerticalDivider(width: 1, color: _LP.border),
+                      Expanded(
+                        child:
+                            widget.selected == null
+                                ? const Center(
+                                  child: Text(
+                                    'Select a request to view details',
+                                    style: TextStyle(color: _LP.textSec),
+                                  ),
+                                )
+                                : _NetworkDetail(entry: widget.selected!),
+                      ),
+                    ],
+                  )
+                  : Stack(
+                    children: [
+                      _buildList(filteredEntries, false),
+                      if (widget.selected != null)
+                        Positioned.fill(
+                          child: Container(
+                            color: _LP.bg,
+                            child: Column(
+                              children: [
+                                Container(
+                                  height: 40,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                  ),
+                                  decoration: const BoxDecoration(
+                                    color: _LP.paper,
+                                    border: Border(
+                                      bottom: BorderSide(color: _LP.border),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () => widget.onSelect(null),
+                                        child: Icon(
+                                          Icons.arrow_back_ios_new,
+                                          size: 18,
+                                          color: theme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Request Details',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () => widget.onSelect(null),
-                                      child: Icon(
-                                        Icons.arrow_back_ios_new,
-                                        size: 18,
-                                        color: theme.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      'Request Details',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
+                                Expanded(
+                                  child: _NetworkDetail(
+                                    entry: widget.selected!,
+                                  ),
                                 ),
-                              ),
-                              Expanded(
-                                child: _NetworkDetail(entry: widget.selected!),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                  ],
-                ),
+                    ],
+                  ),
         ),
       ],
     );
@@ -262,25 +269,25 @@ class _NetworkTabState extends State<_NetworkTab> {
         final hasError = e.error != null;
         final isSuccess = !hasError && e.response != null;
 
-        final methodBadgeColor = hasError
-            ? theme.error
-            : _methodColor(e.method);
-        final statusColor = hasError
-            ? theme.error
-            : (isSuccess ? theme.success : theme.debug);
+        final methodBadgeColor =
+            hasError ? theme.error : _methodColor(e.method);
+        final statusColor =
+            hasError ? theme.error : (isSuccess ? theme.success : theme.debug);
 
         return InkWell(
           onTap: () => widget.onSelect(e.id),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? theme.primary.withValues(alpha: 0.04)
-                  : Colors.transparent,
+              color:
+                  isSelected
+                      ? theme.primary.withValues(alpha: 0.04)
+                      : Colors.transparent,
               border: Border(
-                left: isSelected
-                    ? BorderSide(color: theme.primary, width: 2.5)
-                    : BorderSide.none,
+                left:
+                    isSelected
+                        ? BorderSide(color: theme.primary, width: 2.5)
+                        : BorderSide.none,
                 bottom: const BorderSide(color: _LP.border),
               ),
             ),
@@ -329,8 +336,8 @@ class _NetworkTabState extends State<_NetworkTab> {
                       hasError
                           ? Icons.error_outline
                           : (isSuccess
-                                ? Icons.check_circle_outline
-                                : Icons.pending_outlined),
+                              ? Icons.check_circle_outline
+                              : Icons.pending_outlined),
                       size: 13,
                       color: statusColor,
                     ),
@@ -447,9 +454,15 @@ class _NetworkDetail extends StatelessWidget {
                   color: Colors.transparent,
                   child: IconButton(
                     icon: const Icon(Icons.copy, size: 16, color: _LP.textSec),
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: entry.path));
-                      AppLogsConfig.onCopySuccess?.call(entry.path);
+                    onPressed: () async {
+                      try {
+                        await Clipboard.setData(
+                          ClipboardData(text: entry.path),
+                        );
+                        AppLogsConfig.onCopySuccess?.call(entry.path);
+                      } catch (_) {
+                        // 剪贴板写入失败时静默处理，不触发成功回调
+                      }
                     },
                     visualDensity: VisualDensity.compact,
                   ),
@@ -482,19 +495,19 @@ class _NetworkDetail extends StatelessWidget {
                 _JsonBlock(value: request),
                 response == null
                     ? const Center(
-                        child: Text(
-                          'No response yet',
-                          style: TextStyle(color: _LP.textSec),
-                        ),
-                      )
+                      child: Text(
+                        'No response yet',
+                        style: TextStyle(color: _LP.textSec),
+                      ),
+                    )
                     : _JsonBlock(value: response['data'] ?? response),
                 error == null
                     ? const Center(
-                        child: Text(
-                          'No error',
-                          style: TextStyle(color: _LP.textSec),
-                        ),
-                      )
+                      child: Text(
+                        'No error',
+                        style: TextStyle(color: _LP.textSec),
+                      ),
+                    )
                     : _JsonBlock(value: error),
               ],
             ),

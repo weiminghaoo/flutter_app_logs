@@ -1,3 +1,11 @@
+## 0.1.1
+
+- **fix**: Clipboard `setData` now awaited before calling `onCopySuccess` — prevents false-positive callback on write failure.
+- **perf**: Panel no longer subscribes to `AppLogStore` when closed — eliminates unnecessary rebuilds from log writes.
+- **fix**: Tightened `dio` lower bound to `>=5.9.2` to pass pub.dev downgrade analysis.
+- **docs**: Added real app screenshots to README (Network list, Network detail, Console).
+- **meta**: Added `issue_tracker` field to `pubspec.yaml`.
+
 ## 0.1.0
 
 - Initial public release.

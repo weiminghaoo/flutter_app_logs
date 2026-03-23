@@ -2,9 +2,10 @@ name: flutter_app_logs
 description: >-
   An in-app debug panel for Flutter — inspect network requests and console logs
   with a draggable floating button and a bottom sheet UI, similar to vConsole.
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/wildcatDownstairs/flutter_app_logs
 repository: https://github.com/wildcatDownstairs/flutter_app_logs
+issue_tracker: https://github.com/wildcatDownstairs/flutter_app_logs/issues
 topics:
   - debug
   - logging
@@ -19,7 +20,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  dio: ">=5.0.0 <7.0.0"
+  dio: ">=5.9.2 <7.0.0"
 
 dev_dependencies:
   flutter_test:

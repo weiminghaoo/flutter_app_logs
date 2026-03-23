@@ -79,9 +79,10 @@ class _JsonBlockState extends State<_JsonBlock> {
       builder: (context, constraints) {
         final hasBoundedHeight = constraints.hasBoundedHeight;
         final panelHeight = hasBoundedHeight ? constraints.maxHeight : 260.0;
-        final bottomPad = hasBoundedHeight
-            ? MediaQuery.of(context).padding.bottom + 32
-            : 24.0;
+        final bottomPad =
+            hasBoundedHeight
+                ? MediaQuery.of(context).padding.bottom + 32
+                : 24.0;
 
         return SizedBox(
           width: double.infinity,
@@ -115,9 +116,13 @@ class _JsonBlockState extends State<_JsonBlock> {
                     borderRadius: BorderRadius.circular(6),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(6),
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: _pretty));
-                        AppLogsConfig.onCopySuccess?.call(_pretty);
+                      onTap: () async {
+                        try {
+                          await Clipboard.setData(ClipboardData(text: _pretty));
+                          AppLogsConfig.onCopySuccess?.call(_pretty);
+                        } catch (_) {
+                          // 剪贴板写入失败时静默处理，不触发成功回调
+                        }
                       },
                       child: const Padding(
                         padding: EdgeInsets.all(6),
@@ -167,15 +172,9 @@ class _JsonBlockState extends State<_JsonBlock> {
     if (map.isEmpty) {
       return _line(depth, [
         ...header,
-        const TextSpan(
-          text: '{}',
-          style: TextStyle(color: _JC.punct),
-        ),
+        const TextSpan(text: '{}', style: TextStyle(color: _JC.punct)),
         if (comma)
-          const TextSpan(
-            text: ',',
-            style: TextStyle(color: _JC.punct),
-          ),
+          const TextSpan(text: ',', style: TextStyle(color: _JC.punct)),
       ]);
     }
 
@@ -186,10 +185,7 @@ class _JsonBlockState extends State<_JsonBlock> {
         collapsed: true,
         spans: [
           ...header,
-          const TextSpan(
-            text: '{ ',
-            style: TextStyle(color: _JC.punct),
-          ),
+          const TextSpan(text: '{ ', style: TextStyle(color: _JC.punct)),
           TextSpan(
             text: '…${map.length} keys',
             style: const TextStyle(
@@ -197,15 +193,9 @@ class _JsonBlockState extends State<_JsonBlock> {
               fontStyle: FontStyle.italic,
             ),
           ),
-          const TextSpan(
-            text: ' }',
-            style: TextStyle(color: _JC.punct),
-          ),
+          const TextSpan(text: ' }', style: TextStyle(color: _JC.punct)),
           if (comma)
-            const TextSpan(
-              text: ',',
-              style: TextStyle(color: _JC.punct),
-            ),
+            const TextSpan(text: ',', style: TextStyle(color: _JC.punct)),
         ],
       );
     }
@@ -221,10 +211,7 @@ class _JsonBlockState extends State<_JsonBlock> {
           collapsed: false,
           spans: [
             ...header,
-            const TextSpan(
-              text: '{',
-              style: TextStyle(color: _JC.punct),
-            ),
+            const TextSpan(text: '{', style: TextStyle(color: _JC.punct)),
           ],
         ),
         for (int i = 0; i < entries.length; i++)
@@ -236,15 +223,9 @@ class _JsonBlockState extends State<_JsonBlock> {
             comma: i < entries.length - 1,
           ),
         _line(depth, [
-          const TextSpan(
-            text: '}',
-            style: TextStyle(color: _JC.punct),
-          ),
+          const TextSpan(text: '}', style: TextStyle(color: _JC.punct)),
           if (comma)
-            const TextSpan(
-              text: ',',
-              style: TextStyle(color: _JC.punct),
-            ),
+            const TextSpan(text: ',', style: TextStyle(color: _JC.punct)),
         ]),
       ],
     );
@@ -263,15 +244,9 @@ class _JsonBlockState extends State<_JsonBlock> {
     if (list.isEmpty) {
       return _line(depth, [
         ...header,
-        const TextSpan(
-          text: '[]',
-          style: TextStyle(color: _JC.punct),
-        ),
+        const TextSpan(text: '[]', style: TextStyle(color: _JC.punct)),
         if (comma)
-          const TextSpan(
-            text: ',',
-            style: TextStyle(color: _JC.punct),
-          ),
+          const TextSpan(text: ',', style: TextStyle(color: _JC.punct)),
       ]);
     }
 
@@ -282,10 +257,7 @@ class _JsonBlockState extends State<_JsonBlock> {
         collapsed: true,
         spans: [
           ...header,
-          const TextSpan(
-            text: '[ ',
-            style: TextStyle(color: _JC.punct),
-          ),
+          const TextSpan(text: '[ ', style: TextStyle(color: _JC.punct)),
           TextSpan(
             text: '…${list.length} items',
             style: const TextStyle(
@@ -293,15 +265,9 @@ class _JsonBlockState extends State<_JsonBlock> {
               fontStyle: FontStyle.italic,
             ),
           ),
-          const TextSpan(
-            text: ' ]',
-            style: TextStyle(color: _JC.punct),
-          ),
+          const TextSpan(text: ' ]', style: TextStyle(color: _JC.punct)),
           if (comma)
-            const TextSpan(
-              text: ',',
-              style: TextStyle(color: _JC.punct),
-            ),
+            const TextSpan(text: ',', style: TextStyle(color: _JC.punct)),
         ],
       );
     }
@@ -316,10 +282,7 @@ class _JsonBlockState extends State<_JsonBlock> {
           collapsed: false,
           spans: [
             ...header,
-            const TextSpan(
-              text: '[',
-              style: TextStyle(color: _JC.punct),
-            ),
+            const TextSpan(text: '[', style: TextStyle(color: _JC.punct)),
           ],
         ),
         for (int i = 0; i < list.length; i++)
@@ -330,15 +293,9 @@ class _JsonBlockState extends State<_JsonBlock> {
             comma: i < list.length - 1,
           ),
         _line(depth, [
-          const TextSpan(
-            text: ']',
-            style: TextStyle(color: _JC.punct),
-          ),
+          const TextSpan(text: ']', style: TextStyle(color: _JC.punct)),
           if (comma)
-            const TextSpan(
-              text: ',',
-              style: TextStyle(color: _JC.punct),
-            ),
+            const TextSpan(text: ',', style: TextStyle(color: _JC.punct)),
         ]),
       ],
     );
@@ -379,11 +336,7 @@ class _JsonBlockState extends State<_JsonBlock> {
     return _line(depth, [
       ..._keySpans(keyName),
       valueSpan,
-      if (comma)
-        const TextSpan(
-          text: ',',
-          style: TextStyle(color: _JC.punct),
-        ),
+      if (comma) const TextSpan(text: ',', style: TextStyle(color: _JC.punct)),
     ]);
   }
 
@@ -410,13 +363,14 @@ class _JsonBlockState extends State<_JsonBlock> {
   }) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() {
-        if (collapsed) {
-          _collapsed.remove(path);
-        } else {
-          _collapsed.add(path);
-        }
-      }),
+      onTap:
+          () => setState(() {
+            if (collapsed) {
+              _collapsed.remove(path);
+            } else {
+              _collapsed.add(path);
+            }
+          }),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 1),
         child: Row(
@@ -446,10 +400,7 @@ class _JsonBlockState extends State<_JsonBlock> {
         text: '"$key"',
         style: const TextStyle(color: _JC.key, fontWeight: FontWeight.w700),
       ),
-      const TextSpan(
-        text: ': ',
-        style: TextStyle(color: _JC.punct),
-      ),
+      const TextSpan(text: ': ', style: TextStyle(color: _JC.punct)),
     ];
   }
 }

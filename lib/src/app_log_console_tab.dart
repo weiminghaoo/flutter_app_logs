@@ -52,15 +52,16 @@ class _ConsoleTabState extends State<_ConsoleTab> {
   @override
   Widget build(BuildContext context) {
     final theme = AppLogsConfig.theme;
-    final filteredEntries = widget.entries.where((e) {
-      if (_selectedLevel != null && e.level != _selectedLevel) return false;
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        return e.message.toLowerCase().contains(query) ||
-            (e.tag?.toLowerCase().contains(query) ?? false);
-      }
-      return true;
-    }).toList();
+    final filteredEntries =
+        widget.entries.where((e) {
+          if (_selectedLevel != null && e.level != _selectedLevel) return false;
+          if (_searchQuery.isNotEmpty) {
+            final query = _searchQuery.toLowerCase();
+            return e.message.toLowerCase().contains(query) ||
+                (e.tag?.toLowerCase().contains(query) ?? false);
+          }
+          return true;
+        }).toList();
 
     return Column(
       children: [
@@ -83,15 +84,16 @@ class _ConsoleTabState extends State<_ConsoleTab> {
                     size: 20,
                     color: _LP.textSec,
                   ),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 16),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
-                      : null,
+                  suffixIcon:
+                      _searchQuery.isNotEmpty
+                          ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                          : null,
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -132,8 +134,10 @@ class _ConsoleTabState extends State<_ConsoleTab> {
                           label: _levelLabel(level),
                           selected: _selectedLevel == level,
                           color: _levelColor(level),
-                          onSelected: (v) =>
-                              setState(() => _selectedLevel = v ? level : null),
+                          onSelected:
+                              (v) => setState(
+                                () => _selectedLevel = v ? level : null,
+                              ),
                         ),
                       ),
                     ),
@@ -146,127 +150,141 @@ class _ConsoleTabState extends State<_ConsoleTab> {
 
         // 日志列表
         Expanded(
-          child: filteredEntries.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No logs found',
-                    style: TextStyle(color: _LP.textSec),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-                  itemCount: filteredEntries.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final e = filteredEntries[index];
-                    final hasExtra = e.extra != null && e.extra!.isNotEmpty;
-                    final time =
-                        '${e.at.hour.toString().padLeft(2, '0')}:${e.at.minute.toString().padLeft(2, '0')}:${e.at.second.toString().padLeft(2, '0')}';
+          child:
+              filteredEntries.isEmpty
+                  ? const Center(
+                    child: Text(
+                      'No logs found',
+                      style: TextStyle(color: _LP.textSec),
+                    ),
+                  )
+                  : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+                    itemCount: filteredEntries.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final e = filteredEntries[index];
+                      final hasExtra = e.extra != null && e.extra!.isNotEmpty;
+                      final time =
+                          '${e.at.hour.toString().padLeft(2, '0')}:${e.at.minute.toString().padLeft(2, '0')}:${e.at.second.toString().padLeft(2, '0')}';
 
-                    return GestureDetector(
-                      onLongPress: () {
-                        final baseText = e.tag != null && e.tag!.isNotEmpty
-                            ? '[${e.tag}] ${e.message}'
-                            : e.message;
-                        final copyText = hasExtra
-                            ? '$baseText\n\nextra:\n${_prettyJson(e.extra)}'
-                            : baseText;
-                        Clipboard.setData(ClipboardData(text: copyText));
-                        AppLogsConfig.onCopySuccess?.call(copyText);
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: _LP.paper,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _LP.border),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 2,
-                              offset: Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                left: BorderSide(
-                                  color: _levelColor(e.level),
-                                  width: 4,
+                      return GestureDetector(
+                        onLongPress: () async {
+                          final baseText =
+                              e.tag != null && e.tag!.isNotEmpty
+                                  ? '[${e.tag}] ${e.message}'
+                                  : e.message;
+                          final copyText =
+                              hasExtra
+                                  ? '$baseText\n\nextra:\n${_prettyJson(e.extra)}'
+                                  : baseText;
+                          try {
+                            await Clipboard.setData(
+                              ClipboardData(text: copyText),
+                            );
+                            AppLogsConfig.onCopySuccess?.call(copyText);
+                          } catch (_) {
+                            // 剪贴板写入失败时静默处理，不触发成功回调
+                          }
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: _LP.paper,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: _LP.border),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 2,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  left: BorderSide(
+                                    color: _levelColor(e.level),
+                                    width: 4,
+                                  ),
                                 ),
                               ),
-                            ),
-                            child: Theme(
-                              data: Theme.of(
-                                context,
-                              ).copyWith(dividerColor: Colors.transparent),
-                              child: hasExtra
-                                  ? ExpansionTile(
-                                      tilePadding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 4,
-                                      ),
-                                      childrenPadding: const EdgeInsets.only(
-                                        left: 12,
-                                        right: 12,
-                                        bottom: 12,
-                                      ),
-                                      title: _buildLogHeader(e, time),
-                                      subtitle: Padding(
-                                        padding: const EdgeInsets.only(top: 6),
-                                        child: Text(
-                                          e.message,
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            color: _LP.textPri,
-                                            height: 1.4,
-                                          ),
-                                        ),
-                                      ),
-                                      trailing: const Icon(
-                                        Icons.expand_more,
-                                        size: 20,
-                                        color: _LP.textSec,
-                                      ),
-                                      children: [
-                                        const Divider(
-                                          height: 16,
-                                          color: _LP.border,
-                                        ),
-                                        _JsonBlock(value: e.extra),
-                                      ],
-                                    )
-                                  : Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 10,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          _buildLogHeader(e, time),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            e.message,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              color: _LP.textPri,
-                                              height: 1.4,
+                              child: Theme(
+                                data: Theme.of(
+                                  context,
+                                ).copyWith(dividerColor: Colors.transparent),
+                                child:
+                                    hasExtra
+                                        ? ExpansionTile(
+                                          tilePadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 4,
+                                              ),
+                                          childrenPadding:
+                                              const EdgeInsets.only(
+                                                left: 12,
+                                                right: 12,
+                                                bottom: 12,
+                                              ),
+                                          title: _buildLogHeader(e, time),
+                                          subtitle: Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 6,
+                                            ),
+                                            child: Text(
+                                              e.message,
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                color: _LP.textPri,
+                                                height: 1.4,
+                                              ),
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                    ),
+                                          trailing: const Icon(
+                                            Icons.expand_more,
+                                            size: 20,
+                                            color: _LP.textSec,
+                                          ),
+                                          children: [
+                                            const Divider(
+                                              height: 16,
+                                              color: _LP.border,
+                                            ),
+                                            _JsonBlock(value: e.extra),
+                                          ],
+                                        )
+                                        : Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 10,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              _buildLogHeader(e, time),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                e.message,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: _LP.textPri,
+                                                  height: 1.4,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  ),
         ),
       ],
     );
