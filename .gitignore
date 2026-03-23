@@ -43,3 +43,6 @@ example/web/
 example/macos/
 example/linux/
 example/windows/
+
+# FVM Version Cache
+.fvm/
