@@ -7,11 +7,11 @@ homepage: https://github.com/wildcatDownstairs/flutter_app_logs
 repository: https://github.com/wildcatDownstairs/flutter_app_logs
 issue_tracker: https://github.com/wildcatDownstairs/flutter_app_logs/issues
 topics:
-  - debug
   - logging
   - network
+  - debugging
   - devtools
-  - vconsole
+  - monitoring
 
 environment:
   sdk: ^3.7.0
