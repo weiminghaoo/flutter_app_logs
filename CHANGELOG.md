@@ -1,3 +1,11 @@
+## 0.1.2
+
+- **docs**: Added full example (`example/lib/main.dart`) to README — visible preview snippet + collapsible `<details>` block with complete 510-line code.
+- **docs**: Moved `# flutter_app_logs` heading to first line to satisfy MD041 lint rule.
+- **docs**: Added GitHub repository badge alongside pub version and license badges.
+- **docs**: Updated installation snippet to reference `^0.1.1`.
+- **meta**: Replaced `debug`/`vconsole` topics with `debugging`/`monitoring` for better pub.dev discoverability.
+
 ## 0.1.1
 
 - **fix**: Clipboard `setData` now awaited before calling `onCopySuccess` — prevents false-positive callback on write failure.
