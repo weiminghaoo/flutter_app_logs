@@ -456,10 +456,7 @@ class _NetworkDetail extends StatelessWidget {
                     icon: const Icon(Icons.copy, size: 16, color: _LP.textSec),
                     onPressed: () async {
                       try {
-                        await Clipboard.setData(
-                          ClipboardData(text: entry.path),
-                        );
-                        AppLogsConfig.onCopySuccess?.call(entry.path);
+                        await _copyAppLogText(entry.path);
                       } catch (_) {
                         // 剪贴板写入失败时静默处理，不触发成功回调
                       }

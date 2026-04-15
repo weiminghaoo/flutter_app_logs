@@ -118,8 +118,7 @@ class _JsonBlockState extends State<_JsonBlock> {
                       borderRadius: BorderRadius.circular(6),
                       onTap: () async {
                         try {
-                          await Clipboard.setData(ClipboardData(text: _pretty));
-                          AppLogsConfig.onCopySuccess?.call(_pretty);
+                          await _copyAppLogText(_pretty);
                         } catch (_) {
                           // 剪贴板写入失败时静默处理，不触发成功回调
                         }

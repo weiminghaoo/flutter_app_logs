@@ -179,10 +179,7 @@ class _ConsoleTabState extends State<_ConsoleTab> {
                                   ? '$baseText\n\nextra:\n${_prettyJson(e.extra)}'
                                   : baseText;
                           try {
-                            await Clipboard.setData(
-                              ClipboardData(text: copyText),
-                            );
-                            AppLogsConfig.onCopySuccess?.call(copyText);
+                            await _copyAppLogText(copyText);
                           } catch (_) {
                             // 剪贴板写入失败时静默处理，不触发成功回调
                           }

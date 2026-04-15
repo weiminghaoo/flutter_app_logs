@@ -33,7 +33,7 @@ An in-app debug panel for Flutter — inspect **Console logs** and **Network req
 
 ```yaml
 dependencies:
-  flutter_app_logs: ^0.1.1
+  flutter_app_logs: ^0.1.3
 ```
 
 ```bash

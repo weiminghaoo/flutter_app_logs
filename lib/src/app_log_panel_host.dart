@@ -133,10 +133,11 @@ class _AppLogPanelHostState extends State<AppLogPanelHost> {
         if (_open)
           Positioned.fill(
             child: GestureDetector(
-              onTap: () => setState(() {
-                _open = false;
-                _selectedNetworkId = null;
-              }),
+              onTap:
+                  () => setState(() {
+                    _open = false;
+                    _selectedNetworkId = null;
+                  }),
               behavior: HitTestBehavior.opaque,
               child: Container(color: Colors.black.withValues(alpha: 0.4)),
             ),
@@ -147,11 +148,15 @@ class _AppLogPanelHostState extends State<AppLogPanelHost> {
           open: _open,
           selectedNetworkId: _selectedNetworkId,
           onSelectNetwork: (id) => setState(() => _selectedNetworkId = id),
-          onClose: () => setState(() {
-            _open = false;
-            _selectedNetworkId = null;
-          }),
+          onClose:
+              () => setState(() {
+                _open = false;
+                _selectedNetworkId = null;
+              }),
         ),
+
+        // 复制成功提示放在宿主 Stack 的最后一层，确保盖在日志面板之上。
+        const _CopyFeedbackToast(),
       ],
     );
   }

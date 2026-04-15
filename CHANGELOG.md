@@ -1,3 +1,10 @@
+## 0.1.3
+
+- **fix**: Copy success feedback is now rendered by `AppLogPanelHost` itself, so the "Copied" message appears above the log panel instead of being hidden behind it by the host app's overlay/toast layer.
+- **debug**: Every successful copy now prints the copied text to the Flutter/Xcode console with a `[flutter_app_logs copied text]` header and footer. This makes copied request/response payloads retrievable even when iOS Simulator pasteboard sync does not forward app-written clipboard content to macOS.
+- **refactor**: Centralized all copy actions (JSON blocks, network request paths, and console log entries) through one internal helper so clipboard writes, callbacks, debug output, and in-panel feedback stay consistent.
+- **docs**: Updated installation snippets to reference `^0.1.3`.
+
 ## 0.1.2
 
 - **docs**: Added full example (`example/lib/main.dart`) to README — visible preview snippet + collapsible `<details>` block with complete 510-line code.

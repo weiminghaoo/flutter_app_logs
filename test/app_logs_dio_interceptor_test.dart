@@ -50,7 +50,7 @@ void main() {
     AppLogsConfig.init(enabled: false);
   });
 
-  RequestOptions _makeOptions({
+  RequestOptions makeOptions({
     String path = '/api/test',
     String method = 'GET',
     Map<String, dynamic>? headers,
@@ -68,7 +68,7 @@ void main() {
 
   group('AppLogsDioInterceptor — onRequest', () {
     test('记录网络请求到 AppLogStore', () {
-      final options = _makeOptions();
+      final options = makeOptions();
       final handler = _TestRequestHandler();
       interceptor.onRequest(options, handler);
 
@@ -80,7 +80,7 @@ void main() {
     });
 
     test('分配唯一 ID 到 extra', () {
-      final options = _makeOptions();
+      final options = makeOptions();
       final handler = _TestRequestHandler();
       interceptor.onRequest(options, handler);
 
@@ -90,7 +90,7 @@ void main() {
 
     test('enabled=false 时不记录但仍调用 next', () {
       AppLogsConfig.enabled = false;
-      final options = _makeOptions();
+      final options = makeOptions();
       final handler = _TestRequestHandler();
       interceptor.onRequest(options, handler);
 
@@ -99,9 +99,7 @@ void main() {
     });
 
     test('记录 query parameters', () {
-      final options = _makeOptions(
-        queryParameters: {'page': '1', 'size': '20'},
-      );
+      final options = makeOptions(queryParameters: {'page': '1', 'size': '20'});
       final handler = _TestRequestHandler();
       interceptor.onRequest(options, handler);
 
@@ -110,7 +108,7 @@ void main() {
     });
 
     test('记录 request body (data)', () {
-      final options = _makeOptions(
+      final options = makeOptions(
         method: 'POST',
         data: {'name': 'test', 'age': 25},
       );
@@ -124,7 +122,7 @@ void main() {
 
   group('AppLogsDioInterceptor — onResponse', () {
     test('记录响应并关联到请求', () {
-      final options = _makeOptions(path: '/api/users');
+      final options = makeOptions(path: '/api/users');
       final requestHandler = _TestRequestHandler();
       interceptor.onRequest(options, requestHandler);
 
@@ -144,7 +142,7 @@ void main() {
     });
 
     test('enabled=false 时不记录但仍调用 next', () {
-      final options = _makeOptions();
+      final options = makeOptions();
       // 先正常记录请求
       interceptor.onRequest(options, _TestRequestHandler());
 
@@ -161,7 +159,7 @@ void main() {
 
   group('AppLogsDioInterceptor — onError', () {
     test('记录错误并关联到请求', () {
-      final options = _makeOptions(path: '/api/fail');
+      final options = makeOptions(path: '/api/fail');
       interceptor.onRequest(options, _TestRequestHandler());
 
       final err = DioException(
@@ -181,7 +179,7 @@ void main() {
     });
 
     test('错误包含响应时也记录 response', () {
-      final options = _makeOptions(path: '/api/500');
+      final options = makeOptions(path: '/api/500');
       interceptor.onRequest(options, _TestRequestHandler());
 
       final errorResponse = Response(
@@ -205,7 +203,7 @@ void main() {
 
     test('enabled=false 时不记录但仍调用 next', () {
       AppLogsConfig.enabled = false;
-      final options = _makeOptions();
+      final options = makeOptions();
       final err = DioException(
         requestOptions: options,
         type: DioExceptionType.cancel,
@@ -221,7 +219,7 @@ void main() {
   group('AppLogsDioInterceptor — maskHeaders', () {
     test('maskHeaders=false 时保留完整 header', () {
       AppLogsConfig.maskHeaders = false;
-      final options = _makeOptions(
+      final options = makeOptions(
         headers: {
           'Authorization': 'Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9',
           'Content-Type': 'application/json',
@@ -239,7 +237,7 @@ void main() {
 
     test('maskHeaders=true 时遮盖 Authorization', () {
       AppLogsConfig.maskHeaders = true;
-      final options = _makeOptions(
+      final options = makeOptions(
         headers: {
           'Authorization': 'Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9',
           'Content-Type': 'application/json',
@@ -258,7 +256,7 @@ void main() {
 
     test('maskHeaders=true 时遮盖 token 和 cookie', () {
       AppLogsConfig.maskHeaders = true;
-      final options = _makeOptions(
+      final options = makeOptions(
         headers: {
           'X-Token': 'secret-token-value-12345',
           'Cookie': 'session=abc123def456',
@@ -276,7 +274,7 @@ void main() {
 
     test('maskHeaders=true 保留尾部 6 字符', () {
       AppLogsConfig.maskHeaders = true;
-      final options = _makeOptions(
+      final options = makeOptions(
         headers: {'Authorization': 'Bearer abcdefghijk'},
       );
       interceptor.onRequest(options, _TestRequestHandler());
@@ -290,7 +288,7 @@ void main() {
 
     test('短于 keepTail 的敏感 header 完全遮盖为 ***', () {
       AppLogsConfig.maskHeaders = true;
-      final options = _makeOptions(headers: {'Authorization': 'abc'});
+      final options = makeOptions(headers: {'Authorization': 'abc'});
       interceptor.onRequest(options, _TestRequestHandler());
 
       final headers =
@@ -302,7 +300,7 @@ void main() {
   group('AppLogsDioInterceptor — _safeJsonLike', () {
     test('截断超长字符串', () {
       final longString = 'x' * 3000;
-      final options = _makeOptions(method: 'POST', data: {'big': longString});
+      final options = makeOptions(method: 'POST', data: {'big': longString});
       interceptor.onRequest(options, _TestRequestHandler());
 
       final data = store.network.first.request['data'] as Map<String, Object?>;
@@ -313,7 +311,7 @@ void main() {
 
     test('截断超长列表（>50 元素）', () {
       final bigList = List.generate(60, (i) => i);
-      final options = _makeOptions(method: 'POST', data: {'items': bigList});
+      final options = makeOptions(method: 'POST', data: {'items': bigList});
       interceptor.onRequest(options, _TestRequestHandler());
 
       final data = store.network.first.request['data'] as Map<String, Object?>;
@@ -328,7 +326,7 @@ void main() {
         'name': 'test',
         'file': MultipartFile.fromString('content', filename: 'test.txt'),
       });
-      final options = _makeOptions(method: 'POST', data: formData);
+      final options = makeOptions(method: 'POST', data: formData);
       interceptor.onRequest(options, _TestRequestHandler());
 
       final data = store.network.first.request['data'] as Map<String, Object?>;
@@ -340,7 +338,7 @@ void main() {
 
   group('AppLogsDioInterceptor — 完整请求生命周期', () {
     test('request → response 完整链路', () {
-      final options = _makeOptions(path: '/api/lifecycle');
+      final options = makeOptions(path: '/api/lifecycle');
 
       // 1. Request
       interceptor.onRequest(options, _TestRequestHandler());
@@ -361,7 +359,7 @@ void main() {
     });
 
     test('request → error 完整链路', () {
-      final options = _makeOptions(path: '/api/lifecycle-err');
+      final options = makeOptions(path: '/api/lifecycle-err');
 
       // 1. Request
       interceptor.onRequest(options, _TestRequestHandler());
