@@ -14,7 +14,10 @@ Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，�
   <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_detail.png" width="260" alt="Network 请求详情" />
   &nbsp;
   <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_console.png" width="260" alt="Console 日志" />
+  &nbsp;
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_firebase_flow.png" width="260" alt="FireBase 登录流程" />
 </p>
+
 
 ---
 
