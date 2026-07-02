@@ -36,7 +36,7 @@ Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，�
 
 ```yaml
 dependencies:
-  flutter_app_logs: ^0.1.3
+  flutter_app_logs: ^0.1.5
 ```
 
 ```bash

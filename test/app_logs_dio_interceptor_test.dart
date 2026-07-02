@@ -28,6 +28,18 @@ class _TestErrorHandler extends ErrorInterceptorHandler {
   }
 }
 
+class _FakeCheckoutCart {
+  const _FakeCheckoutCart({required this.cartId, required this.userId});
+
+  final int cartId;
+  final int userId;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'cartId': cartId,
+    'userId': userId,
+  };
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -139,6 +151,82 @@ void main() {
       expect(store.network.first.response!['statusCode'], 200);
       expect(store.network.first.durationMs, isNotNull);
       expect(responseHandler.nextCalled, isTrue);
+    });
+
+    test('保留嵌套对象数组的 JSON 结构', () {
+      final options = makeOptions(path: '/api/checkout');
+      interceptor.onRequest(options, _TestRequestHandler());
+
+      final response = Response(
+        requestOptions: options,
+        statusCode: 200,
+        data: <String, Object?>{
+          'cartList': <Object?>[
+            <String, Object?>{
+              'shopId': 430,
+              'carts': <Object?>[
+                const _FakeCheckoutCart(cartId: 5168, userId: 205),
+              ],
+            },
+          ],
+        },
+      );
+      interceptor.onResponse(response, _TestResponseHandler());
+
+      final responseData =
+          store.network.first.response!['data'] as Map<String, Object?>;
+      final cartList = responseData['cartList'] as List<Object?>;
+      final firstGroup = cartList.first as Map<String, Object?>;
+      final carts = firstGroup['carts'] as List<Object?>;
+      final firstCart = carts.first as Map<String, Object?>;
+
+      expect(firstCart['cartId'], 5168);
+      expect(firstCart['userId'], 205);
+    });
+
+    test('深层嵌套数据仍保留类型和层级', () {
+      final options = makeOptions(path: '/api/deep-checkout');
+      interceptor.onRequest(options, _TestRequestHandler());
+
+      final response = Response(
+        requestOptions: options,
+        statusCode: 200,
+        data: <String, Object?>{
+          'payload': <String, Object?>{
+            'stores': <Object?>[
+              <String, Object?>{
+                'sections': <Object?>[
+                  <String, Object?>{
+                    'groups': <Object?>[
+                      <String, Object?>{
+                        'carts': <Object?>[
+                          const _FakeCheckoutCart(cartId: 9001, userId: 301),
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      );
+      interceptor.onResponse(response, _TestResponseHandler());
+
+      final responseData =
+          store.network.first.response!['data'] as Map<String, Object?>;
+      final payload = responseData['payload'] as Map<String, Object?>;
+      final stores = payload['stores'] as List<Object?>;
+      final firstStore = stores.first as Map<String, Object?>;
+      final sections = firstStore['sections'] as List<Object?>;
+      final firstSection = sections.first as Map<String, Object?>;
+      final groups = firstSection['groups'] as List<Object?>;
+      final firstGroup = groups.first as Map<String, Object?>;
+      final carts = firstGroup['carts'] as List<Object?>;
+      final firstCart = carts.first as Map<String, Object?>;
+
+      expect(firstCart['cartId'], 9001);
+      expect(firstCart['userId'], 301);
     });
 
     test('enabled=false 时不记录但仍调用 next', () {
@@ -333,6 +421,17 @@ void main() {
       expect(data['type'], 'FormData');
       expect(data['fields'], isA<List>());
       expect(data['files'], isA<List>());
+    });
+
+    test('循环引用不会导致递归卡死', () {
+      final cyclic = <String, Object?>{};
+      cyclic['self'] = cyclic;
+
+      final options = makeOptions(method: 'POST', data: cyclic);
+      interceptor.onRequest(options, _TestRequestHandler());
+
+      final data = store.network.first.request['data'] as Map<String, Object?>;
+      expect(data['self'], '(circular reference)');
     });
   });
 

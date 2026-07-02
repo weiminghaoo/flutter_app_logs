@@ -170,9 +170,13 @@ class AppLogsDioInterceptor extends Interceptor {
     return null;
   }
 
-  /// 将任意 Dart 对象转为 JSON 安全结构（深度限制 + 长度截断）。
-  Object? _safeJsonLike(Object? value, {int depth = 0}) {
-    const maxDepth = 4;
+  /// 将任意 Dart 对象转为 JSON 安全结构。
+  ///
+  /// 这里优先保留 Map / List 的类型和层级，避免深层对象被提前串成
+  /// `"[...]"` 或 `"{...}"`。长度控制只针对超长字符串和超长列表；
+  /// 对极端情况下的循环引用，使用 [identityHashCode] 做保护。
+  Object? _safeJsonLike(Object? value, {Set<int>? activeRefs}) {
+    activeRefs ??= <int>{};
     if (value == null) return null;
     if (value is num || value is bool) return value;
     if (value is String) {
@@ -180,30 +184,42 @@ class AppLogsDioInterceptor extends Interceptor {
       return '${value.substring(0, 2000)}...(truncated)';
     }
 
-    if (depth >= maxDepth) return value.toString();
-
     if (value is Map) {
+      final refId = identityHashCode(value);
+      if (!activeRefs.add(refId)) return '(circular reference)';
+
       final out = <String, Object?>{};
-      for (final entry in value.entries) {
-        out[entry.key.toString()] = _safeJsonLike(
-          entry.value,
-          depth: depth + 1,
-        );
+      try {
+        for (final entry in value.entries) {
+          out[entry.key.toString()] = _safeJsonLike(
+            entry.value,
+            activeRefs: activeRefs,
+          );
+        }
+      } finally {
+        activeRefs.remove(refId);
       }
       return out;
     }
 
     if (value is Iterable) {
+      final refId = identityHashCode(value);
+      if (!activeRefs.add(refId)) return '(circular reference)';
+
       final out = <Object?>[];
       var i = 0;
       var truncated = false;
-      for (final item in value) {
-        if (i >= 50) {
-          truncated = true;
-          break;
+      try {
+        for (final item in value) {
+          if (i >= 50) {
+            truncated = true;
+            break;
+          }
+          out.add(_safeJsonLike(item, activeRefs: activeRefs));
+          i++;
         }
-        out.add(_safeJsonLike(item, depth: depth + 1));
-        i++;
+      } finally {
+        activeRefs.remove(refId);
       }
       if (truncated) {
         out.add('...(truncated)');
@@ -231,7 +247,8 @@ class AppLogsDioInterceptor extends Interceptor {
     }
 
     try {
-      return jsonDecode(jsonEncode(value));
+      final normalized = jsonDecode(jsonEncode(value));
+      return _safeJsonLike(normalized, activeRefs: activeRefs);
     } catch (_) {
       return value.toString();
     }

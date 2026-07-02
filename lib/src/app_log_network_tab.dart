@@ -9,12 +9,14 @@ class _NetworkTab extends StatefulWidget {
   final String? selectedId;
   final AppNetworkLogEntry? selected;
   final ValueChanged<String?> onSelect;
+  final bool showToolbar;
 
   const _NetworkTab({
     required this.entries,
     required this.selectedId,
     required this.selected,
     required this.onSelect,
+    required this.showToolbar,
   });
 
   @override
@@ -25,17 +27,38 @@ class _NetworkTabState extends State<_NetworkTab> {
   String _searchQuery = '';
   String? _selectedMethod;
   late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _searchFocusNode = FocusNode();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NetworkTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.showToolbar && widget.showToolbar) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocusNode.requestFocus();
+      });
+    }
+    if (oldWidget.showToolbar && !widget.showToolbar) {
+      _searchFocusNode.unfocus();
+      if (_searchQuery.isNotEmpty || _selectedMethod != null) {
+        _searchController.clear();
+        _searchQuery = '';
+        _selectedMethod = null;
+      }
+    }
   }
 
   Color _methodColor(String method) {
@@ -84,87 +107,104 @@ class _NetworkTabState extends State<_NetworkTab> {
 
     return Column(
       children: [
-        // 搜索栏 + 方法过滤芯片
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          decoration: const BoxDecoration(
-            color: _LP.paper,
-            border: Border(bottom: BorderSide(color: _LP.border)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search network requests...',
-                  prefixIcon: const Icon(
-                    Icons.search,
-                    size: 20,
-                    color: _LP.textSec,
-                  ),
-                  suffixIcon:
-                      _searchQuery.isNotEmpty
-                          ? IconButton(
-                            icon: const Icon(Icons.clear, size: 16),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                          : null,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _LP.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _LP.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: theme.primary),
-                  ),
-                ),
-                textInputAction: TextInputAction.search,
-                onChanged: (value) => setState(() => _searchQuery = value),
-                onSubmitted: (value) => setState(() => _searchQuery = value),
-              ),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All',
-                      selected: _selectedMethod == null,
-                      onSelected: (v) => setState(() => _selectedMethod = null),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child:
+              widget.showToolbar
+                  ? Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
                     ),
-                    const SizedBox(width: 8),
-                    ...['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].map(
-                      (method) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _FilterChip(
-                          label: method,
-                          selected: _selectedMethod == method,
-                          color: _methodColor(method),
-                          onSelected:
-                              (v) => setState(
-                                () => _selectedMethod = v ? method : null,
-                              ),
+                    decoration: const BoxDecoration(
+                      color: _LP.paper,
+                      border: Border(bottom: BorderSide(color: _LP.border)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          decoration: InputDecoration(
+                            hintText: 'Search network requests...',
+                            prefixIcon: const Icon(
+                              Icons.search,
+                              size: 20,
+                              color: _LP.textSec,
+                            ),
+                            suffixIcon:
+                                _searchQuery.isNotEmpty
+                                    ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 16),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                    )
+                                    : null,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: _LP.border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: _LP.border),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: theme.primary),
+                            ),
+                          ),
+                          textInputAction: TextInputAction.search,
+                          onChanged:
+                              (value) => setState(() => _searchQuery = value),
+                          onSubmitted:
+                              (value) => setState(() => _searchQuery = value),
                         ),
-                      ),
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _FilterChip(
+                                label: 'All',
+                                selected: _selectedMethod == null,
+                                onSelected:
+                                    (v) =>
+                                        setState(() => _selectedMethod = null),
+                              ),
+                              const SizedBox(width: 8),
+                              ...['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].map(
+                                (method) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _FilterChip(
+                                    label: method,
+                                    selected: _selectedMethod == method,
+                                    color: _methodColor(method),
+                                    onSelected:
+                                        (v) => setState(
+                                          () =>
+                                              _selectedMethod =
+                                                  v ? method : null,
+                                        ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+                  )
+                  : const SizedBox.shrink(),
         ),
 
         // 内容区
@@ -205,45 +245,9 @@ class _NetworkTabState extends State<_NetworkTab> {
                         Positioned.fill(
                           child: Container(
                             color: _LP.bg,
-                            child: Column(
-                              children: [
-                                Container(
-                                  height: 40,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                  ),
-                                  decoration: const BoxDecoration(
-                                    color: _LP.paper,
-                                    border: Border(
-                                      bottom: BorderSide(color: _LP.border),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      GestureDetector(
-                                        onTap: () => widget.onSelect(null),
-                                        child: Icon(
-                                          Icons.arrow_back_ios_new,
-                                          size: 18,
-                                          color: theme.primary,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Text(
-                                        'Request Details',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _NetworkDetail(
-                                    entry: widget.selected!,
-                                  ),
-                                ),
-                              ],
+                            child: _NetworkDetail(
+                              entry: widget.selected!,
+                              onBack: () => widget.onSelect(null),
                             ),
                           ),
                         ),
@@ -377,8 +381,9 @@ class _NetworkTabState extends State<_NetworkTab> {
 
 class _NetworkDetail extends StatelessWidget {
   final AppNetworkLogEntry entry;
+  final VoidCallback? onBack;
 
-  const _NetworkDetail({required this.entry});
+  const _NetworkDetail({required this.entry, this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -394,27 +399,44 @@ class _NetworkDetail extends StatelessWidget {
         children: [
           // 顶部 URL 信息栏
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
             color: _LP.paper,
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Text(
-                          entry.path,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: _LP.textPri,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          if (onBack != null) ...[
+                            _NetworkBackChevron(
+                              actionKey: const Key(
+                                'app_logs_network_detail_back_button',
+                              ),
+                              onPressed: onBack,
+                              color: theme.primary,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Expanded(
+                            child: Text(
+                              entry.path,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: _LP.textPri,
+                                height: 1.2,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Container(
@@ -454,6 +476,7 @@ class _NetworkDetail extends StatelessWidget {
                   color: Colors.transparent,
                   child: IconButton(
                     icon: const Icon(Icons.copy, size: 16, color: _LP.textSec),
+                    visualDensity: VisualDensity.compact,
                     onPressed: () async {
                       try {
                         await _copyAppLogText(entry.path);
@@ -461,7 +484,6 @@ class _NetworkDetail extends StatelessWidget {
                         // 剪贴板写入失败时静默处理，不触发成功回调
                       }
                     },
-                    visualDensity: VisualDensity.compact,
                   ),
                 ),
               ],
@@ -510,6 +532,30 @@ class _NetworkDetail extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _NetworkBackChevron extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final Color color;
+  final Key? actionKey;
+
+  const _NetworkBackChevron({
+    required this.onPressed,
+    required this.color,
+    this.actionKey,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: actionKey,
+      onTap: onPressed,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Icon(Icons.arrow_back_ios_new, size: 18, color: color),
       ),
     );
   }

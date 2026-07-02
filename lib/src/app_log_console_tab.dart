@@ -6,8 +6,9 @@ part of 'app_logs.dart';
 
 class _ConsoleTab extends StatefulWidget {
   final List<AppConsoleLogEntry> entries;
+  final bool showToolbar;
 
-  const _ConsoleTab({required this.entries});
+  const _ConsoleTab({required this.entries, required this.showToolbar});
 
   @override
   State<_ConsoleTab> createState() => _ConsoleTabState();
@@ -16,18 +17,39 @@ class _ConsoleTab extends StatefulWidget {
 class _ConsoleTabState extends State<_ConsoleTab> {
   String _searchQuery = '';
   late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
   AppLogLevel? _selectedLevel;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _searchFocusNode = FocusNode();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ConsoleTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.showToolbar && widget.showToolbar) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocusNode.requestFocus();
+      });
+    }
+    if (oldWidget.showToolbar && !widget.showToolbar) {
+      _searchFocusNode.unfocus();
+      if (_searchQuery.isNotEmpty || _selectedLevel != null) {
+        _searchController.clear();
+        _searchQuery = '';
+        _selectedLevel = null;
+      }
+    }
   }
 
   Color _levelColor(AppLogLevel level) {
@@ -65,87 +87,103 @@ class _ConsoleTabState extends State<_ConsoleTab> {
 
     return Column(
       children: [
-        // 搜索栏 + 过滤芯片
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          decoration: const BoxDecoration(
-            color: _LP.paper,
-            border: Border(bottom: BorderSide(color: _LP.border)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search console logs...',
-                  prefixIcon: const Icon(
-                    Icons.search,
-                    size: 20,
-                    color: _LP.textSec,
-                  ),
-                  suffixIcon:
-                      _searchQuery.isNotEmpty
-                          ? IconButton(
-                            icon: const Icon(Icons.clear, size: 16),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                          : null,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _LP.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _LP.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: theme.primary),
-                  ),
-                ),
-                textInputAction: TextInputAction.search,
-                onChanged: (value) => setState(() => _searchQuery = value),
-                onSubmitted: (value) => setState(() => _searchQuery = value),
-              ),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All',
-                      selected: _selectedLevel == null,
-                      onSelected: (v) => setState(() => _selectedLevel = null),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child:
+              widget.showToolbar
+                  ? Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
                     ),
-                    const SizedBox(width: 8),
-                    ...AppLogLevel.values.map(
-                      (level) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _FilterChip(
-                          label: _levelLabel(level),
-                          selected: _selectedLevel == level,
-                          color: _levelColor(level),
-                          onSelected:
-                              (v) => setState(
-                                () => _selectedLevel = v ? level : null,
-                              ),
+                    decoration: const BoxDecoration(
+                      color: _LP.paper,
+                      border: Border(bottom: BorderSide(color: _LP.border)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          decoration: InputDecoration(
+                            hintText: 'Search console logs...',
+                            prefixIcon: const Icon(
+                              Icons.search,
+                              size: 20,
+                              color: _LP.textSec,
+                            ),
+                            suffixIcon:
+                                _searchQuery.isNotEmpty
+                                    ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 16),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                    )
+                                    : null,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: _LP.border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: _LP.border),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: theme.primary),
+                            ),
+                          ),
+                          textInputAction: TextInputAction.search,
+                          onChanged:
+                              (value) => setState(() => _searchQuery = value),
+                          onSubmitted:
+                              (value) => setState(() => _searchQuery = value),
                         ),
-                      ),
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _FilterChip(
+                                label: 'All',
+                                selected: _selectedLevel == null,
+                                onSelected:
+                                    (v) =>
+                                        setState(() => _selectedLevel = null),
+                              ),
+                              const SizedBox(width: 8),
+                              ...AppLogLevel.values.map(
+                                (level) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _FilterChip(
+                                    label: _levelLabel(level),
+                                    selected: _selectedLevel == level,
+                                    color: _levelColor(level),
+                                    onSelected:
+                                        (v) => setState(
+                                          () =>
+                                              _selectedLevel = v ? level : null,
+                                        ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+                  )
+                  : const SizedBox.shrink(),
         ),
 
         // 日志列表

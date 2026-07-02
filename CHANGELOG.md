@@ -1,3 +1,19 @@
+## 0.1.5
+
+- **feat**: Network detail mobile header now uses a denser action layout. The old standalone `Request Details` row is removed, back/copy actions are merged into the detail header, and the request path/method/duration are rendered in a more compact card.
+- **feat**: The bottom sheet now supports dragging upward from the gray handle to expand beyond the default 85% height.
+- **fix**: When expanded, the sheet now stops below the system status bar instead of covering it, so the handle remains reachable for dragging downward to close.
+- **test**: Added widget coverage for the mobile detail-header layout and the drag-to-expand interaction with top safe-area constraints.
+- **docs**: Updated installation snippets to reference `^0.1.5`.
+
+## 0.1.4
+
+- **feat**: Added a header-level search toggle button. Network and Console filter bars are now collapsed by default and expand on demand, leaving more vertical space for request/response details and log content.
+- **fix**: Network response serialization now preserves deep `Map` / `List` structure for nested object arrays instead of degrading them into strings like `"[...]"`.
+- **fix**: Added circular-reference protection in response normalization so extreme nested payloads do not recurse indefinitely during log rendering.
+- **test**: Added widget coverage for the new search toggle interaction and regression tests for deep nested object-array serialization.
+- **docs**: Updated installation snippets to reference `^0.1.4`.
+
 ## 0.1.3
 
 - **fix**: Copy success feedback is now rendered by `AppLogPanelHost` itself, so the "Copied" message appears above the log panel instead of being hidden behind it by the host app's overlay/toast layer.

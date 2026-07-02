@@ -21,48 +21,140 @@ class _BottomPanel extends StatefulWidget {
   State<_BottomPanel> createState() => _BottomPanelState();
 }
 
-class _BottomPanelState extends State<_BottomPanel> {
+class _BottomPanelState extends State<_BottomPanel>
+    with SingleTickerProviderStateMixin {
+  static const double _collapsedHeightFactor = 0.85;
+
   double _dragOffset = 0;
+  double _panelHeight = 0;
   bool _isDragging = false;
+  late final TabController _tabController;
+  int _selectedTabIndex = 0;
+  bool _showNetworkFilters = false;
+  bool _showConsoleFilters = false;
+
+  bool get _isToolbarVisible =>
+      _selectedTabIndex == 0 ? _showNetworkFilters : _showConsoleFilters;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabChanged);
+  }
+
+  @override
+  void dispose() {
+    _tabController
+      ..removeListener(_handleTabChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleTabChanged() {
+    if (_selectedTabIndex == _tabController.index) return;
+    setState(() => _selectedTabIndex = _tabController.index);
+  }
 
   @override
   void didUpdateWidget(_BottomPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.open && widget.open) {
       _dragOffset = 0;
+      _panelHeight = 0;
+      _showNetworkFilters = false;
+      _showConsoleFilters = false;
     }
+  }
+
+  double _collapsedHeight(double screenHeight) =>
+      screenHeight * _collapsedHeightFactor;
+
+  double _resolvedPanelHeight(double screenHeight, double topSafe) {
+    final collapsedHeight = _collapsedHeight(screenHeight);
+    final expandedHeight = math.max(collapsedHeight, screenHeight - topSafe);
+    if (_panelHeight == 0) return collapsedHeight;
+    return _panelHeight.clamp(collapsedHeight, expandedHeight);
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final topSafe = MediaQuery.paddingOf(context).top;
+    final collapsedHeight = _collapsedHeight(screenHeight);
+    final expandedHeight = math.max(collapsedHeight, screenHeight - topSafe);
+    final currentHeight = _resolvedPanelHeight(screenHeight, topSafe);
     final dy = details.delta.dy;
-    if (dy > 0 || _dragOffset > 0) {
-      setState(() {
-        _isDragging = true;
-        _dragOffset = (_dragOffset + dy).clamp(0.0, double.infinity);
-      });
-    }
+
+    setState(() {
+      _isDragging = true;
+
+      if (dy < 0) {
+        _panelHeight = (currentHeight - dy).clamp(
+          collapsedHeight,
+          expandedHeight,
+        );
+        _dragOffset = 0;
+        return;
+      }
+
+      var remainingDy = dy;
+      if (currentHeight > collapsedHeight) {
+        final shrinkable = currentHeight - collapsedHeight;
+        final heightDelta = remainingDy.clamp(0.0, shrinkable);
+        _panelHeight = (currentHeight - heightDelta).clamp(
+          collapsedHeight,
+          expandedHeight,
+        );
+        remainingDy -= heightDelta;
+      }
+
+      _dragOffset = (_dragOffset + remainingDy).clamp(0.0, double.infinity);
+    });
   }
 
   void _onDragEnd(DragEndDetails details) {
-    final height = MediaQuery.sizeOf(context).height * 0.85;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final topSafe = MediaQuery.paddingOf(context).top;
+    final collapsedHeight = _collapsedHeight(screenHeight);
+    final expandedHeight = math.max(collapsedHeight, screenHeight - topSafe);
+    final currentHeight = _resolvedPanelHeight(screenHeight, topSafe);
+    final expandThreshold =
+        collapsedHeight + (expandedHeight - collapsedHeight) / 2;
     final velocity = details.primaryVelocity ?? 0;
-    final shouldClose = _dragOffset > height * 0.2 || velocity > 400;
+    final shouldClose = _dragOffset > collapsedHeight * 0.2 || velocity > 400;
+    final shouldExpand = currentHeight > expandThreshold || velocity < -400;
 
     if (shouldClose) {
-      setState(() => _isDragging = false);
+      setState(() {
+        _isDragging = false;
+        _dragOffset = 0;
+        _panelHeight = 0;
+      });
       widget.onClose();
     } else {
       setState(() {
         _isDragging = false;
         _dragOffset = 0;
+        _panelHeight = shouldExpand ? expandedHeight : collapsedHeight;
       });
     }
+  }
+
+  void _toggleToolbar() {
+    setState(() {
+      if (_selectedTabIndex == 0) {
+        _showNetworkFilters = !_showNetworkFilters;
+      } else {
+        _showConsoleFilters = !_showConsoleFilters;
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final height = size.height * 0.85;
+    final topSafe = MediaQuery.paddingOf(context).top;
+    final height = _resolvedPanelHeight(size.height, topSafe);
     final theme = AppLogsConfig.theme;
 
     return AnimatedPositioned(
@@ -75,6 +167,7 @@ class _BottomPanelState extends State<_BottomPanel> {
       child: Material(
         color: Colors.transparent,
         child: Container(
+          key: const Key('app_logs_bottom_panel'),
           decoration: const BoxDecoration(
             color: _LP.bg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -90,6 +183,7 @@ class _BottomPanelState extends State<_BottomPanel> {
             children: [
               // 拖拽手柄
               GestureDetector(
+                key: const Key('app_logs_drag_handle'),
                 onVerticalDragUpdate: _onDragUpdate,
                 onVerticalDragEnd: _onDragEnd,
                 onVerticalDragCancel:
@@ -145,6 +239,17 @@ class _BottomPanelState extends State<_BottomPanel> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
+                          key: const Key('app_logs_toggle_toolbar_button'),
+                          onPressed: _toggleToolbar,
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            Icons.search_rounded,
+                            size: 20,
+                            color:
+                                _isToolbarVisible ? theme.primary : _LP.textSec,
+                          ),
+                        ),
+                        IconButton(
                           onPressed: () {
                             AppLogStore.instance.clearConsole();
                             AppLogStore.instance.clearNetwork();
@@ -181,6 +286,7 @@ class _BottomPanelState extends State<_BottomPanel> {
                       Material(
                         color: _LP.bg,
                         child: TabBar(
+                          controller: _tabController,
                           labelColor: theme.primary,
                           unselectedLabelColor: _LP.textSec,
                           indicatorColor: theme.primary,
@@ -222,14 +328,19 @@ class _BottomPanelState extends State<_BottomPanel> {
                                                 .firstOrNull;
 
                                     return TabBarView(
+                                      controller: _tabController,
                                       children: [
                                         _NetworkTab(
                                           entries: network,
                                           selectedId: resolvedSelectedId,
                                           selected: selected,
                                           onSelect: widget.onSelectNetwork,
+                                          showToolbar: _showNetworkFilters,
                                         ),
-                                        _ConsoleTab(entries: console),
+                                        _ConsoleTab(
+                                          entries: console,
+                                          showToolbar: _showConsoleFilters,
+                                        ),
                                       ],
                                     );
                                   },
