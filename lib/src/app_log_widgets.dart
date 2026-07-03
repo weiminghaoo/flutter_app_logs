@@ -62,6 +62,10 @@ class _JsonBlock extends StatefulWidget {
 
 class _JsonBlockState extends State<_JsonBlock> {
   final Set<String> _collapsed = {};
+  final Map<String, int> _visibleChildren = {};
+
+  static const int _initialVisibleChildren = 24;
+  static const int _visibleChildrenStep = 24;
 
   static const _monoBase = TextStyle(
     fontSize: 13,
@@ -70,8 +74,6 @@ class _JsonBlockState extends State<_JsonBlock> {
     fontFamily: 'SF Mono',
     color: _JC.base,
   );
-
-  String get _pretty => _prettyJson(widget.value);
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +120,9 @@ class _JsonBlockState extends State<_JsonBlock> {
                       borderRadius: BorderRadius.circular(6),
                       onTap: () async {
                         try {
-                          await _copyAppLogText(_pretty);
+                          await _copyAppLogText(
+                            await _prettyJsonAsync(widget.value),
+                          );
                         } catch (_) {
                           // 剪贴板写入失败时静默处理，不触发成功回调
                         }
@@ -156,6 +160,38 @@ class _JsonBlockState extends State<_JsonBlock> {
       return _buildListNode(value, path, depth, keyName: keyName, comma: comma);
     }
     return _leaf(value, depth, keyName: keyName, comma: comma);
+  }
+
+  int _visibleCountFor(String path, int total) {
+    if (total <= _initialVisibleChildren) {
+      return total;
+    }
+    final current = _visibleChildren[path] ?? _initialVisibleChildren;
+    return current.clamp(_initialVisibleChildren, total);
+  }
+
+  void _showMoreChildren(String path, int total) {
+    setState(() {
+      _visibleChildren[path] =
+          (_visibleChildren[path] ?? _initialVisibleChildren) +
+          _visibleChildrenStep;
+    });
+  }
+
+  // 全部展开时按批次推进，让每一帧只多渲染一批新行，
+  // 避免几千项的数组一次性塞进同一帧导致卡顿。
+  Future<void> _expandAll(String path, int total) async {
+    while (mounted) {
+      final current = _visibleChildren[path] ?? _initialVisibleChildren;
+      if (current >= total) break;
+      setState(() {
+        _visibleChildren[path] = math.min(
+          current + _visibleChildrenStep,
+          total,
+        );
+      });
+      await SchedulerBinding.instance.endOfFrame;
+    }
   }
 
   Widget _buildMap(
@@ -200,6 +236,7 @@ class _JsonBlockState extends State<_JsonBlock> {
     }
 
     final entries = map.entries.toList();
+    final visibleCount = _visibleCountFor(path, entries.length);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -213,13 +250,20 @@ class _JsonBlockState extends State<_JsonBlock> {
             const TextSpan(text: '{', style: TextStyle(color: _JC.punct)),
           ],
         ),
-        for (int i = 0; i < entries.length; i++)
+        for (int i = 0; i < visibleCount; i++)
           _buildNode(
             entries[i].value,
             '$path.${entries[i].key}',
             depth + 1,
             keyName: entries[i].key.toString(),
             comma: i < entries.length - 1,
+          ),
+        if (visibleCount < entries.length)
+          _buildLoadMoreLine(
+            path: path,
+            depth: depth + 1,
+            shownCount: visibleCount,
+            totalCount: entries.length,
           ),
         _line(depth, [
           const TextSpan(text: '}', style: TextStyle(color: _JC.punct)),
@@ -271,6 +315,7 @@ class _JsonBlockState extends State<_JsonBlock> {
       );
     }
 
+    final visibleCount = _visibleCountFor(path, list.length);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -284,12 +329,19 @@ class _JsonBlockState extends State<_JsonBlock> {
             const TextSpan(text: '[', style: TextStyle(color: _JC.punct)),
           ],
         ),
-        for (int i = 0; i < list.length; i++)
+        for (int i = 0; i < visibleCount; i++)
           _buildNode(
             list[i],
             '$path[$i]',
             depth + 1,
             comma: i < list.length - 1,
+          ),
+        if (visibleCount < list.length)
+          _buildLoadMoreLine(
+            path: path,
+            depth: depth + 1,
+            shownCount: visibleCount,
+            totalCount: list.length,
           ),
         _line(depth, [
           const TextSpan(text: ']', style: TextStyle(color: _JC.punct)),
@@ -349,6 +401,65 @@ class _JsonBlockState extends State<_JsonBlock> {
           SizedBox(width: depth * 16.0),
           const SizedBox(width: 16),
           Text.rich(TextSpan(children: spans), style: _monoBase),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadMoreLine({
+    required String path,
+    required int depth,
+    required int shownCount,
+    required int totalCount,
+  }) {
+    final remainingCount = totalCount - shownCount;
+    final nextCount = math.min(remainingCount, _visibleChildrenStep);
+    // 剩余项数不超过一个步长时，"显示下一批" 和 "全部展开" 结果完全一样，
+    // 只保留一个按钮，避免两个按钮做同一件事。
+    final showSingleButton = remainingCount <= _visibleChildrenStep;
+
+    final outlinedStyle = OutlinedButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      minimumSize: const Size(0, 28),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      side: const BorderSide(color: _JC.border),
+      foregroundColor: _JC.label,
+      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+    );
+    final textStyle = TextButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      minimumSize: const Size(0, 28),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      foregroundColor: _JC.label,
+      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(width: depth * 16.0),
+          const SizedBox(width: 16),
+          if (showSingleButton)
+            OutlinedButton(
+              onPressed: () => _expandAll(path, totalCount),
+              style: outlinedStyle,
+              child: Text('展开剩余 $remainingCount 项'),
+            )
+          else ...[
+            OutlinedButton(
+              onPressed: () => _showMoreChildren(path, totalCount),
+              style: outlinedStyle,
+              child: Text('显示后 $nextCount 项（共 $totalCount 项）'),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _expandAll(path, totalCount),
+              style: textStyle,
+              child: Text('全部展开（剩余 $remainingCount 项）'),
+            ),
+          ],
         ],
       ),
     );
@@ -416,3 +527,17 @@ String _prettyJson(Object? value) {
     return value.toString();
   }
 }
+
+Future<String> _prettyJsonAsync(Object? value) async {
+  if (value == null) {
+    return '';
+  }
+
+  try {
+    return await compute(_prettyJsonInBackground, value);
+  } catch (_) {
+    return _prettyJson(value);
+  }
+}
+
+String _prettyJsonInBackground(Object? value) => _prettyJson(value);

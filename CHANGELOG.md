@@ -1,3 +1,11 @@
+## 0.1.6
+
+- **perf**: Large JSON responses in the log panel now render in batches (24 nodes at a time) instead of building the entire tree at once, fixing severe jank when opening big payloads.
+- **perf**: Copying the raw JSON text now formats it on a background isolate via `compute`, keeping the UI thread free for large payloads.
+- **fix**: "Show next batch" and "Expand all" are merged into a single button when the remaining item count is small, since both used to produce the identical result.
+- **fix**: "Expand all" now advances in batches across frames instead of inflating the whole subtree in one frame, so it no longer reintroduces jank on very large arrays/objects.
+- **docs**: Updated installation snippets to reference `^0.1.6`.
+
 ## 0.1.5
 
 - **feat**: Network detail mobile header now uses a denser action layout. The old standalone `Request Details` row is removed, back/copy actions are merged into the detail header, and the request path/method/duration are rendered in a more compact card.

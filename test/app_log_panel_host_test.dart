@@ -99,6 +99,61 @@ void main() {
     );
   });
 
+  testWidgets('大 Response JSON 默认分批渲染，避免一次性展开全部节点', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final records = List.generate(60, (index) {
+      return <String, Object?>{'id': index, 'title': 'item-$index'};
+    });
+
+    AppLogStore.instance.logNetworkRequest(
+      id: 'network-large-response',
+      at: DateTime.now(),
+      path: '/shop/shop/list',
+      method: 'GET',
+      request: const <String, Object?>{'path': '/shop/shop/list'},
+    );
+    AppLogStore.instance.logNetworkResponse(
+      id: 'network-large-response',
+      at: DateTime.now(),
+      request: const <String, Object?>{'path': '/shop/shop/list'},
+      response: <String, Object?>{
+        'statusCode': 200,
+        'data': <String, Object?>{'records': records},
+      },
+      durationMs: 464,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+
+    await openPanel(tester);
+    await tester.tap(find.text('/shop/shop/list').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Response'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('"item-23"'), findsOneWidget);
+    expect(find.textContaining('"item-24"'), findsNothing);
+    final showMoreFinder = find.text('显示后 24 项（共 60 项）');
+    expect(showMoreFinder, findsOneWidget);
+
+    await tester.ensureVisible(showMoreFinder);
+    await tester.tap(showMoreFinder);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('"item-24"'), findsOneWidget);
+  });
+
   testWidgets('上拉灰色手柄后 bottom sheet 顶到状态栏下方', (tester) async {
     tester.view
       ..physicalSize = const Size(390, 844)

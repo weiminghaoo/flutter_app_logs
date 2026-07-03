@@ -20,6 +20,7 @@ import 'dart:convert'; // JSON 序列化（_prettyJson 使用）
 import 'dart:math' as math; // math.max（用于 clamp 边界保护）
 
 // ── Flutter framework ──────────────────────────────────────────────────────
+import 'package:flutter/foundation.dart'; // compute（大 JSON 文本格式化放到异步路径）
 import 'package:flutter/material.dart'; // Widget、Material 组件树（含 ChangeNotifier）
 import 'package:flutter/scheduler.dart'; // SchedulerPhase（构建阶段延迟通知）
 import 'package:flutter/services.dart'; // Clipboard（复制到剪贴板）
