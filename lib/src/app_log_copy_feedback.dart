@@ -47,20 +47,22 @@ Future<void> _copyAppLogText(String text) async {
 }
 
 void _debugPrintCopiedText(String text) {
-  const chunkSize = 800;
-  debugPrint('📋 [flutter_app_logs copied text] length=${text.length}');
+  _AppErrorCapture.instance.withoutDebugPrintCapture(() {
+    const chunkSize = 800;
+    debugPrint('📋 [flutter_app_logs copied text] length=${text.length}');
 
-  if (text.isEmpty) {
-    debugPrint('<empty>');
-    return;
-  }
+    if (text.isEmpty) {
+      debugPrint('<empty>');
+      return;
+    }
 
-  for (var start = 0; start < text.length; start += chunkSize) {
-    final end = math.min(start + chunkSize, text.length);
-    debugPrint(text.substring(start, end));
-  }
+    for (var start = 0; start < text.length; start += chunkSize) {
+      final end = math.min(start + chunkSize, text.length);
+      debugPrint(text.substring(start, end));
+    }
 
-  debugPrint('📋 [flutter_app_logs copied text end]');
+    debugPrint('📋 [flutter_app_logs copied text end]');
+  });
 }
 
 class _CopyFeedbackToast extends StatelessWidget {

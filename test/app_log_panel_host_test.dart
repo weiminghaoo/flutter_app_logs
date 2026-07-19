@@ -1,4 +1,7 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_app_logs/flutter_app_logs.dart';
 
@@ -9,12 +12,14 @@ void main() {
     AppLogsConfig.init(enabled: true, consoleMinLevel: AppLogLevel.debug);
     AppLogStore.instance.clearConsole();
     AppLogStore.instance.clearNetwork();
+    AppLogStore.instance.clearErrors();
   });
 
   tearDown(() {
     AppLogsConfig.init(enabled: false);
     AppLogStore.instance.clearConsole();
     AppLogStore.instance.clearNetwork();
+    AppLogStore.instance.clearErrors();
   });
 
   Future<void> openPanel(WidgetTester tester) async {
@@ -53,6 +58,229 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Search network requests...'), findsNothing);
+  });
+
+  testWidgets('Error 面板归并 debugPrint 的 Network Error 错误块', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+
+    debugPrint(
+      '🚨 [Network Error] POST '
+      'https://jp.api.tatamijp.cn/im/conversation/message/set_read',
+    );
+    debugPrint('   Status: 500');
+    debugPrint('   Payload: {"conversation_id": 130}');
+    debugPrint('   Response: {"code": 500, "message": "请求错误"}');
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(AppLogStore.instance.console, isEmpty);
+    expect(AppLogStore.instance.errors, hasLength(1));
+    expect(AppLogStore.instance.errors.single.message, contains('Status: 500'));
+    expect(
+      AppLogStore.instance.errors.single.message,
+      contains('conversation_id'),
+    );
+
+    await openPanel(tester);
+    await tester.tap(find.text('Error'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('NETWORK'), findsOneWidget);
+    expect(find.textContaining('[Network Error] POST'), findsOneWidget);
+    expect(find.textContaining('Status: 500'), findsOneWidget);
+
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (_) async => null,
+    );
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    String? copiedText;
+    AppLogsConfig.onCopySuccess = (text) => copiedText = text;
+    await tester.tap(find.byKey(const Key('app_logs_error_copy_button')));
+    await tester.pump();
+
+    expect(copiedText, contains('[Network Error] POST'));
+    expect(copiedText, contains('conversation_id'));
+    expect(find.text('Copied'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 1500));
+    expect(AppLogStore.instance.errors, hasLength(1));
+  });
+
+  testWidgets('Error 搜索区只在 Error 标签打开时显示', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+    await openPanel(tester);
+    await tester.tap(find.text('Error'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search errors...'), findsNothing);
+    await tester.tap(find.byKey(const Key('app_logs_toggle_toolbar_button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Search errors...'), findsOneWidget);
+  });
+
+  testWidgets('带堆栈的 Error 卡片不会触发 ListTile Material 层级断言', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+    AppLogStore.instance.logError(
+      source: AppErrorLogSource.flutter,
+      message: 'ListTile regression',
+      stackTrace: StackTrace.fromString('#0 build (widget.dart:10:3)'),
+    );
+    await tester.pump();
+
+    await openPanel(tester);
+    await tester.tap(find.text('Error'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ListTile regression'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('长 Error 默认三行折叠，展开后显示完整错误与堆栈', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+    final longMessage = List<String>.generate(
+      30,
+      (index) => 'Render diagnostic line $index with a long explanation',
+    ).join('\n');
+    AppLogStore.instance.logError(
+      source: AppErrorLogSource.flutter,
+      message: longMessage,
+      stackTrace: StackTrace.fromString('#0 build (widget.dart:10:3)'),
+    );
+    await tester.pump();
+
+    await openPanel(tester);
+    await tester.tap(find.text('Error'));
+    await tester.pumpAndSettle();
+
+    final previewFinder = find.byKey(
+      const Key('app_logs_error_message_preview'),
+    );
+    final preview = tester.widget<Text>(previewFinder);
+    expect(preview.maxLines, 3);
+    expect(preview.overflow, TextOverflow.ellipsis);
+    expect(
+      find.byKey(const Key('app_logs_error_message_full')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('app_logs_error_copy_button')),
+        matching: find.byType(Tooltip),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('FLUTTER'));
+    await tester.pumpAndSettle();
+
+    expect(previewFinder, findsNothing);
+    expect(
+      find.byKey(const Key('app_logs_error_message_full')),
+      findsOneWidget,
+    );
+    expect(find.text('Stack trace'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('FLUTTER'));
+    await tester.pumpAndSettle();
+    expect(previewFinder, findsOneWidget);
+  });
+
+  testWidgets('Error 捕获 FlutterError 与未处理异步异常并转发原 handler', (tester) async {
+    final originalFlutterError = FlutterError.onError;
+    final originalPlatformError = ui.PlatformDispatcher.instance.onError;
+    var flutterForwarded = false;
+    var platformForwarded = false;
+    FlutterError.onError = (_) => flutterForwarded = true;
+    ui.PlatformDispatcher.instance.onError = (_, __) {
+      platformForwarded = true;
+      return true;
+    };
+    addTearDown(() {
+      FlutterError.onError = originalFlutterError;
+      ui.PlatformDispatcher.instance.onError = originalPlatformError;
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+
+    FlutterError.onError!(
+      FlutterErrorDetails(
+        exception: StateError('framework failed'),
+        stack: StackTrace.fromString('#0 build (widget.dart:10:3)'),
+      ),
+    );
+    final handled = ui.PlatformDispatcher.instance.onError!(
+      StateError('async failed'),
+      StackTrace.fromString('#0 fetch (service.dart:20:5)'),
+    );
+    await tester.pump();
+
+    expect(flutterForwarded, isTrue);
+    expect(platformForwarded, isTrue);
+    expect(handled, isTrue);
+    expect(AppLogStore.instance.errors, hasLength(2));
+    expect(
+      AppLogStore.instance.errors.first.source,
+      AppErrorLogSource.unhandled,
+    );
+    expect(AppLogStore.instance.errors.last.source, AppErrorLogSource.flutter);
+
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('Network 详情返回按钮并入详情头部，不再单独占一行', (tester) async {

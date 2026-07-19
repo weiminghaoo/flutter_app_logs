@@ -120,4 +120,21 @@ void main() {
       expect(copy.durationMs, entry.durationMs);
     });
   });
+
+  group('AppErrorLogEntry', () {
+    test('构造并读取错误来源与堆栈', () {
+      final now = DateTime.now();
+      final entry = AppErrorLogEntry(
+        at: now,
+        source: AppErrorLogSource.unhandled,
+        message: 'type cast failed',
+        stackTrace: '#0 parser (schema.g.dart:10:3)',
+      );
+
+      expect(entry.at, now);
+      expect(entry.source, AppErrorLogSource.unhandled);
+      expect(entry.message, 'type cast failed');
+      expect(entry.stackTrace, contains('schema.g.dart'));
+    });
+  });
 }

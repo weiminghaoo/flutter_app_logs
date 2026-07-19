@@ -1,3 +1,12 @@
+## Unreleased
+
+- **feat**: Added a dedicated Error panel that automatically captures Flutter framework errors, unhandled root-isolate exceptions, and multiline Network Error / App Error blocks emitted through `debugPrint`.
+- **feat**: Added a copy action to each Error card header while retaining long-press copy support.
+- **feat**: Error cards now use a Console-style collapsible layout with a three-line summary and expandable full error / stack trace content.
+- **fix**: Removed the Error copy button tooltip dependency on an ancestor `Overlay`, preventing `No Overlay widget found` from recursively rendering inside the Error panel.
+- **refactor**: Kept `AppConsoleLogger` as an explicit lifecycle and flow logging API; captured errors now use independent storage, search, and clearing behavior.
+- **test**: Added store, capture forwarding, multiline grouping, search-toolbar, and Error tab widget coverage.
+
 ## 0.1.6
 
 - **perf**: Large JSON responses in the log panel now render in batches (24 nodes at a time) instead of building the entire tree at once, fixing severe jank when opening big payloads.

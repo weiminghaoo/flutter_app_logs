@@ -6,7 +6,7 @@
 [![GitHub](https://img.shields.io/badge/GitHub-wildcatDownstairs/flutter__app__logs-181717?logo=github&logoColor=white)](https://github.com/wildcatDownstairs/flutter_app_logs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，实时查看 **Console 日志** 和 **Network 请求记录**，类似前端的 [vConsole](https://github.com/niconi/vConsole)。
+Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，实时查看 **Network 请求**、主动记录的 **Console 日志** 和 Flutter **Error 错误**，类似前端的 [vConsole](https://github.com/niconi/vConsole)。
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_list.png" width="260" alt="Network 请求列表" />
@@ -14,6 +14,8 @@ Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，�
   <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_detail.png" width="260" alt="Network 请求详情" />
   &nbsp;
   <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_console.png" width="260" alt="Console 日志" />
+  &nbsp;
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_error.png" width="260" alt="Error 错误面板" />
   &nbsp;
   <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_firebase_flow.png" width="260" alt="FireBase 登录流程" />
 </p>
@@ -23,7 +25,8 @@ Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，�
 
 ## 特性
 
-- **Console 日志面板** — 查看 debug / info / warn / error 四级日志，支持级别筛选和关键词搜索
+- **Console 日志面板** — 查看用户通过 `AppConsoleLogger` 主动记录的生命周期和流程日志，支持级别筛选和关键词搜索
+- **Error 错误面板** — 自动捕获 `FlutterError`、根 isolate 未处理异常，以及 `debugPrint` 输出的 Network Error / App Error 多行错误块；默认显示三行摘要，可展开完整错误与堆栈
 - **Network 日志面板** — 检查 HTTP 请求、响应和错误，显示耗时、Headers、请求体、响应体
 - **可拖拽浮动按钮** — 在屏幕任意位置拖动，不遮挡业务 UI
 - **内置 Dio 拦截器** — `AppLogsDioInterceptor` 一行代码接入，自动记录请求全生命周期
@@ -76,6 +79,8 @@ MaterialApp(
   home: const MyHomePage(),
 );
 ```
+
+`AppLogPanelHost` 挂载后会自动启用 Error 捕获；`AppConsoleLogger` 仍只用于用户主动记录的生命周期和流程日志，两类数据不会混在一起。
 
 ### 3. 写日志 & 添加拦截器
 

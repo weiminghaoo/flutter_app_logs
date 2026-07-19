@@ -26,9 +26,27 @@ class _AppLogPanelHostState extends State<AppLogPanelHost> {
   String? _selectedNetworkId;
   Offset? _btnPos;
   bool _isDragging = false;
+  bool _isErrorCaptureAttached = false;
 
   static const double _btnSize = 44.0;
   static const double _btnEdge = 16.0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (AppLogsConfig.enabled) {
+      _AppErrorCapture.instance.attach();
+      _isErrorCaptureAttached = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_isErrorCaptureAttached) {
+      _AppErrorCapture.instance.detach();
+    }
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant AppLogPanelHost oldWidget) {

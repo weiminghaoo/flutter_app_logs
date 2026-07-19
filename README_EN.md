@@ -6,7 +6,7 @@
 [![GitHub](https://img.shields.io/badge/GitHub-wildcatDownstairs/flutter__app__logs-181717?logo=github&logoColor=white)](https://github.com/wildcatDownstairs/flutter_app_logs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-An in-app debug panel for Flutter — inspect **Console logs** and **Network requests** via a draggable floating button + bottom sheet UI, similar to [vConsole](https://github.com/niconi/vConsole) for web.
+An in-app debug panel for Flutter — inspect **Network requests**, opt-in **Console logs**, and Flutter **Errors** via a draggable floating button + bottom sheet UI, similar to [vConsole](https://github.com/niconi/vConsole) for web.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_list.png" width="260" alt="Network request list" />
@@ -14,13 +14,16 @@ An in-app debug panel for Flutter — inspect **Console logs** and **Network req
   <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_detail.png" width="260" alt="Network request detail" />
   &nbsp;
   <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_console.png" width="260" alt="Console logs" />
+  &nbsp;
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_error.png" width="260" alt="Error panel" />
 </p>
 
 ---
 
 ## Features
 
-- **Console Log Panel** — view debug / info / warn / error logs with level filtering and keyword search
+- **Console Log Panel** — view lifecycle and flow logs explicitly recorded with `AppConsoleLogger`, with level filtering and keyword search
+- **Error Panel** — automatically captures `FlutterError`, unhandled root-isolate exceptions, and multiline Network Error / App Error blocks emitted through `debugPrint`; shows a three-line summary by default and expands to the full error and stack trace
 - **Network Log Panel** — inspect HTTP requests, responses, and errors with timing, headers, and body
 - **Draggable FAB** — freely drag the floating button anywhere on screen
 - **Built-in Dio Interceptor** — `AppLogsDioInterceptor`, one line to integrate
@@ -72,6 +75,8 @@ MaterialApp(
   home: const MyHomePage(),
 );
 ```
+
+`AppLogPanelHost` enables Error capture while mounted. `AppConsoleLogger` remains an explicit API for lifecycle and flow logs, and those records stay separate from captured errors.
 
 ### 3. Log & intercept
 

@@ -1,7 +1,7 @@
 /// flutter_app_logs — 应用内调试日志面板
 ///
 /// 在 Flutter 应用中提供一个可拖拽的浮动调试面板，
-/// 用于查看 Console 日志和 Network 请求记录，类似 vConsole。
+/// 用于查看 Network 请求、主动记录的 Console 日志和 Flutter Error，类似 vConsole。
 ///
 /// ## 快速开始
 ///
@@ -38,6 +38,8 @@ export 'src/app_logs.dart'
         AppConsoleLogger,
         AppLogPanelHost,
         AppConsoleLogEntry,
+        AppErrorLogEntry,
+        AppErrorLogSource,
         AppNetworkLogEntry;
 
 // ── Dio 拦截器 ─────────────────────────────────────────────────────────────

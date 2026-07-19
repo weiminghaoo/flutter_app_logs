@@ -35,6 +35,33 @@ class AppConsoleLogEntry {
   });
 }
 
+/// Error 面板中的错误来源。
+enum AppErrorLogSource {
+  /// Flutter framework 通过 [FlutterError.onError] 上报的异常。
+  flutter,
+
+  /// 根 isolate 中未处理、由 [ui.PlatformDispatcher.onError] 上报的异常。
+  unhandled,
+
+  /// `debugPrint` 输出的 Network Error / App Error 错误块。
+  console,
+}
+
+/// Error 面板中的一条错误记录。
+class AppErrorLogEntry {
+  final DateTime at;
+  final AppErrorLogSource source;
+  final String message;
+  final String? stackTrace;
+
+  const AppErrorLogEntry({
+    required this.at,
+    required this.source,
+    required this.message,
+    this.stackTrace,
+  });
+}
+
 /// Network 请求的单条记录。
 ///
 /// 一个请求的生命周期分三个阶段：
@@ -98,9 +125,11 @@ class AppLogStore extends ChangeNotifier {
   // ── 容量上限 ──────────────────────────────────────────────────────────────
   static const int _maxConsole = 500;
   static const int _maxNetwork = 200;
+  static const int _maxErrors = 200;
 
   // ── 内部存储 ──────────────────────────────────────────────────────────────
   final List<AppConsoleLogEntry> _console = <AppConsoleLogEntry>[];
+  final List<AppErrorLogEntry> _errors = <AppErrorLogEntry>[];
   final Map<String, AppNetworkLogEntry> _networkById =
       <String, AppNetworkLogEntry>{};
   final List<String> _networkOrder = <String>[];
@@ -110,6 +139,8 @@ class AppLogStore extends ChangeNotifier {
   // ── 只读访问器 ────────────────────────────────────────────────────────────
   List<AppConsoleLogEntry> get console => List.unmodifiable(_console);
 
+  List<AppErrorLogEntry> get errors => List.unmodifiable(_errors);
+
   List<AppNetworkLogEntry> get network => List.unmodifiable(
     _networkOrder.map((id) => _networkById[id]).whereType<AppNetworkLogEntry>(),
   );
@@ -118,6 +149,12 @@ class AppLogStore extends ChangeNotifier {
   void clearConsole() {
     if (_console.isEmpty) return;
     _console.clear();
+    _notifyListenersSafely();
+  }
+
+  void clearErrors() {
+    if (_errors.isEmpty) return;
+    _errors.clear();
     _notifyListenersSafely();
   }
 
@@ -150,6 +187,27 @@ class AppLogStore extends ChangeNotifier {
     );
     if (_console.length > _maxConsole) {
       _console.removeRange(_maxConsole, _console.length);
+    }
+    _notifyListenersSafely();
+  }
+
+  void logError({
+    required AppErrorLogSource source,
+    required String message,
+    StackTrace? stackTrace,
+  }) {
+    if (!AppLogsConfig.enabled) return;
+    _errors.insert(
+      0,
+      AppErrorLogEntry(
+        at: DateTime.now(),
+        source: source,
+        message: message,
+        stackTrace: stackTrace?.toString(),
+      ),
+    );
+    if (_errors.length > _maxErrors) {
+      _errors.removeRange(_maxErrors, _errors.length);
     }
     _notifyListenersSafely();
   }

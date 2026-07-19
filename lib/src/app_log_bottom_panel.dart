@@ -32,14 +32,18 @@ class _BottomPanelState extends State<_BottomPanel>
   int _selectedTabIndex = 0;
   bool _showNetworkFilters = false;
   bool _showConsoleFilters = false;
+  bool _showErrorFilters = false;
 
-  bool get _isToolbarVisible =>
-      _selectedTabIndex == 0 ? _showNetworkFilters : _showConsoleFilters;
+  bool get _isToolbarVisible => switch (_selectedTabIndex) {
+    0 => _showNetworkFilters,
+    1 => _showConsoleFilters,
+    _ => _showErrorFilters,
+  };
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_handleTabChanged);
   }
 
@@ -64,6 +68,7 @@ class _BottomPanelState extends State<_BottomPanel>
       _panelHeight = 0;
       _showNetworkFilters = false;
       _showConsoleFilters = false;
+      _showErrorFilters = false;
     }
   }
 
@@ -144,8 +149,10 @@ class _BottomPanelState extends State<_BottomPanel>
     setState(() {
       if (_selectedTabIndex == 0) {
         _showNetworkFilters = !_showNetworkFilters;
-      } else {
+      } else if (_selectedTabIndex == 1) {
         _showConsoleFilters = !_showConsoleFilters;
+      } else {
+        _showErrorFilters = !_showErrorFilters;
       }
     });
   }
@@ -253,6 +260,7 @@ class _BottomPanelState extends State<_BottomPanel>
                           onPressed: () {
                             AppLogStore.instance.clearConsole();
                             AppLogStore.instance.clearNetwork();
+                            AppLogStore.instance.clearErrors();
                           },
                           visualDensity: VisualDensity.compact,
                           icon: const Icon(
@@ -279,7 +287,7 @@ class _BottomPanelState extends State<_BottomPanel>
               // TabBar + TabBarView
               Expanded(
                 child: DefaultTabController(
-                  length: 2,
+                  length: 3,
                   initialIndex: 0,
                   child: Column(
                     children: [
@@ -299,6 +307,7 @@ class _BottomPanelState extends State<_BottomPanel>
                           tabs: const [
                             Tab(text: 'Network'),
                             Tab(text: 'Console'),
+                            Tab(text: 'Error'),
                           ],
                         ),
                       ),
@@ -313,6 +322,7 @@ class _BottomPanelState extends State<_BottomPanel>
                                         AppLogStore.instance.console;
                                     final network =
                                         AppLogStore.instance.network;
+                                    final errors = AppLogStore.instance.errors;
 
                                     final resolvedSelectedId =
                                         widget.selectedNetworkId;
@@ -340,6 +350,10 @@ class _BottomPanelState extends State<_BottomPanel>
                                         _ConsoleTab(
                                           entries: console,
                                           showToolbar: _showConsoleFilters,
+                                        ),
+                                        _ErrorTab(
+                                          entries: errors,
+                                          showToolbar: _showErrorFilters,
                                         ),
                                       ],
                                     );

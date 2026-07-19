@@ -12,6 +12,7 @@ void main() {
     // 重置状态
     store.clearConsole();
     store.clearNetwork();
+    store.clearErrors();
     // 启用日志，重置级别
     AppLogsConfig.init(enabled: true, consoleMinLevel: AppLogLevel.debug);
   });
@@ -19,6 +20,69 @@ void main() {
   tearDown(() {
     // 恢复默认（disabled）
     AppLogsConfig.init(enabled: false);
+    store.clearErrors();
+  });
+
+  group('AppLogStore — Error 日志', () {
+    test('Error 与 Console 使用独立存储', () {
+      store.logConsole(level: AppLogLevel.error, message: 'manual flow log');
+      store.logError(
+        source: AppErrorLogSource.unhandled,
+        message: 'Bad state: failed',
+        stackTrace: StackTrace.fromString('#0 main (main.dart:1:1)'),
+      );
+
+      expect(store.console.single.message, 'manual flow log');
+      expect(store.errors.single.message, 'Bad state: failed');
+      expect(store.errors.single.source, AppErrorLogSource.unhandled);
+      expect(store.errors.single.stackTrace, contains('#0 main'));
+    });
+
+    test('clearErrors 不影响 Console 与 Network', () {
+      store.logConsole(level: AppLogLevel.info, message: 'flow');
+      store.logNetworkRequest(
+        id: 'network',
+        at: DateTime.now(),
+        path: '/health',
+        method: 'GET',
+        request: const <String, Object?>{},
+      );
+      store.logError(
+        source: AppErrorLogSource.console,
+        message: '🚨 [Network Error] GET /health',
+      );
+
+      store.clearErrors();
+
+      expect(store.errors, isEmpty);
+      expect(store.console, hasLength(1));
+      expect(store.network, hasLength(1));
+    });
+
+    test('Error 容量上限为 200 条', () {
+      for (var i = 0; i < 210; i++) {
+        store.logError(source: AppErrorLogSource.flutter, message: 'error-$i');
+      }
+
+      expect(store.errors, hasLength(200));
+      expect(store.errors.first.message, 'error-209');
+      expect(store.errors.last.message, 'error-10');
+    });
+
+    test('errors 返回不可变列表', () {
+      store.logError(source: AppErrorLogSource.flutter, message: 'immutable');
+
+      expect(
+        () => store.errors.add(
+          AppErrorLogEntry(
+            at: DateTime.now(),
+            source: AppErrorLogSource.console,
+            message: 'hack',
+          ),
+        ),
+        throwsUnsupportedError,
+      );
+    });
   });
 
   group('AppLogStore — Console 日志', () {
