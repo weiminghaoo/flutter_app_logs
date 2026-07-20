@@ -60,6 +60,40 @@ void main() {
     expect(find.text('Search network requests...'), findsNothing);
   });
 
+  testWidgets('MaterialApp.builder 接入时搜索框拥有局部 Overlay', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder:
+            (context, child) =>
+                AppLogPanelHost(child: child ?? const SizedBox.shrink()),
+        home: const Scaffold(body: SizedBox.expand()),
+      ),
+    );
+
+    await openPanel(tester);
+    await tester.tap(find.text('Error'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('app_logs_toggle_toolbar_button')));
+    await tester.pumpAndSettle();
+
+    final searchField = find.widgetWithText(TextField, 'Search errors...');
+    expect(searchField, findsOneWidget);
+    expect(Overlay.maybeOf(tester.element(searchField)), isNotNull);
+
+    await tester.tap(searchField);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Network 支持 method、status、host 与耗时组合筛选', (tester) async {
     tester.view
       ..physicalSize = const Size(390, 844)
@@ -464,6 +498,135 @@ void main() {
       AppErrorLogSource.unhandled,
     );
     expect(AppLogStore.instance.errors.last.source, AppErrorLogSource.flutter);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('Error 显示重复次数、来源筛选和未读 Badge', (tester) async {
+    tester.view
+      ..physicalSize = const Size(320, 700)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final store = AppLogStore.instance;
+    final stackTrace = StackTrace.fromString('#0 build (widget.dart:10:3)');
+    store.logError(
+      source: AppErrorLogSource.flutter,
+      message: 'flutter duplicate',
+      stackTrace: stackTrace,
+    );
+    store.logError(
+      source: AppErrorLogSource.flutter,
+      message: 'flutter duplicate',
+      stackTrace: stackTrace,
+    );
+    store.logError(
+      source: AppErrorLogSource.unhandled,
+      message: 'unhandled only',
+    );
+    store.logError(source: AppErrorLogSource.console, message: 'console only');
+
+    expect(store.errors, hasLength(3));
+    expect(store.unreadErrorCount, 3);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+    await openPanel(tester);
+
+    expect(
+      find.byKey(const Key('app_logs_error_unread_badge')),
+      findsOneWidget,
+    );
+    expect(find.text('3'), findsOneWidget);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('app_logs_error_unread_badge')))
+          .height,
+      18,
+    );
+
+    await tester.tap(find.text('Error'));
+    await tester.pumpAndSettle();
+
+    expect(store.unreadErrorCount, 0);
+    expect(find.byKey(const Key('app_logs_error_unread_badge')), findsNothing);
+    expect(
+      find.byKey(const Key('app_logs_error_occurrence_count')),
+      findsOneWidget,
+    );
+    expect(find.text('×2'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('app_logs_toggle_toolbar_button')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('app_logs_error_filter_source_all')),
+      findsOneWidget,
+    );
+
+    final flutterFilter = find.byKey(
+      const Key('app_logs_error_filter_source_flutter'),
+    );
+    await tester.ensureVisible(flutterFilter);
+    await tester.tap(flutterFilter);
+    await tester.pump();
+
+    expect(find.text('flutter duplicate'), findsOneWidget);
+    expect(find.text('unhandled only'), findsNothing);
+    expect(find.text('console only'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Error 自动捕获规则支持关闭来源、扩展起始模式和忽略消息', (tester) async {
+    final originalFlutterError = FlutterError.onError;
+    var flutterForwarded = false;
+    FlutterError.onError = (_) => flutterForwarded = true;
+    addTearDown(() => FlutterError.onError = originalFlutterError);
+
+    AppLogsConfig.init(
+      enabled: true,
+      errorCaptureRules: const AppErrorCaptureRules(
+        captureFlutterErrors: false,
+        captureUnhandledErrors: false,
+        includeDefaultConsolePatterns: false,
+        additionalConsolePatterns: <Pattern>['FATAL:'],
+        ignoredPatterns: <Pattern>['skip-me'],
+      ),
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+
+    FlutterError.onError!(
+      FlutterErrorDetails(exception: StateError('disabled flutter capture')),
+    );
+    debugPrint('🚨 [Network Error] default rule disabled');
+    debugPrint('FATAL: custom console error');
+    debugPrint('  custom detail');
+    await tester.pump(const Duration(milliseconds: 120));
+
+    debugPrint('FATAL: skip-me');
+    debugPrint('  ignored detail');
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(flutterForwarded, isTrue);
+    expect(AppLogStore.instance.errors, hasLength(1));
+    expect(
+      AppLogStore.instance.errors.single.message,
+      contains('custom console error'),
+    );
+    expect(
+      AppLogStore.instance.errors.single.message,
+      isNot(contains('skip-me')),
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
   });

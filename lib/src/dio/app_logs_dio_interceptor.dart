@@ -124,7 +124,8 @@ class AppLogsDioInterceptor extends Interceptor {
       'url': uri.toString(),
       'headers': _sanitizeHeaders(options.headers),
       'query': _safeJsonLike(options.queryParameters),
-      if (options.data != null) 'data': _safeJsonLike(options.data),
+      if (options.data != null && AppLogsConfig.maxNetworkBodyCharacters > 0)
+        'data': _safeNetworkBody(options.data),
     };
   }
 
@@ -132,7 +133,8 @@ class AppLogsDioInterceptor extends Interceptor {
     return <String, Object?>{
       'statusCode': response.statusCode,
       'headers': _safeJsonLike(response.headers.map),
-      if (response.data != null) 'data': _safeJsonLike(response.data),
+      if (response.data != null && AppLogsConfig.maxNetworkBodyCharacters > 0)
+        'data': _safeNetworkBody(response.data),
     };
   }
 
@@ -178,13 +180,19 @@ class AppLogsDioInterceptor extends Interceptor {
   /// 这里优先保留 Map / List 的类型和层级，避免深层对象被提前串成
   /// `"[...]"` 或 `"{...}"`。长度控制只针对超长字符串和超长列表；
   /// 对极端情况下的循环引用，使用 [identityHashCode] 做保护。
-  Object? _safeJsonLike(Object? value, {Set<int>? activeRefs}) {
+  Object? _safeJsonLike(
+    Object? value, {
+    Set<int>? activeRefs,
+    int? maxStringCharacters = 2000,
+  }) {
     activeRefs ??= <int>{};
     if (value == null) return null;
     if (value is num || value is bool) return value;
     if (value is String) {
-      if (value.length <= 2000) return value;
-      return '${value.substring(0, 2000)}...(truncated)';
+      if (maxStringCharacters == null || value.length <= maxStringCharacters) {
+        return value;
+      }
+      return '${value.substring(0, maxStringCharacters)}...(truncated)';
     }
 
     if (value is Map) {
@@ -197,6 +205,7 @@ class AppLogsDioInterceptor extends Interceptor {
           out[entry.key.toString()] = _safeJsonLike(
             entry.value,
             activeRefs: activeRefs,
+            maxStringCharacters: maxStringCharacters,
           );
         }
       } finally {
@@ -218,7 +227,13 @@ class AppLogsDioInterceptor extends Interceptor {
             truncated = true;
             break;
           }
-          out.add(_safeJsonLike(item, activeRefs: activeRefs));
+          out.add(
+            _safeJsonLike(
+              item,
+              activeRefs: activeRefs,
+              maxStringCharacters: maxStringCharacters,
+            ),
+          );
           i++;
         }
       } finally {
@@ -253,7 +268,30 @@ class AppLogsDioInterceptor extends Interceptor {
 
     try {
       final normalized = jsonDecode(jsonEncode(value));
-      return _safeJsonLike(normalized, activeRefs: activeRefs);
+      return _safeJsonLike(
+        normalized,
+        activeRefs: activeRefs,
+        maxStringCharacters: maxStringCharacters,
+      );
+    } catch (_) {
+      return value.toString();
+    }
+  }
+
+  Object? _safeNetworkBody(Object value) {
+    final normalized = _safeJsonLike(value, maxStringCharacters: null);
+    final serialized = switch (normalized) {
+      String text => text,
+      _ => _encodeJsonOrString(normalized),
+    };
+    final maxCharacters = AppLogsConfig.maxNetworkBodyCharacters;
+    if (serialized.length <= maxCharacters) return normalized;
+    return '${serialized.substring(0, maxCharacters)}...(truncated)';
+  }
+
+  String _encodeJsonOrString(Object? value) {
+    try {
+      return jsonEncode(value);
     } catch (_) {
       return value.toString();
     }

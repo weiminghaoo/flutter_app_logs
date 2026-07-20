@@ -206,9 +206,36 @@ void main() {
       );
 
       expect(entry.at, now);
+      expect(entry.firstOccurredAt, now);
       expect(entry.source, AppErrorLogSource.unhandled);
       expect(entry.message, 'type cast failed');
       expect(entry.stackTrace, contains('schema.g.dart'));
+      expect(entry.occurrenceCount, 1);
+      expect(entry.isUnread, isFalse);
+    });
+
+    test('copyWith updates repeat and unread metadata', () {
+      final firstAt = DateTime(2026, 7, 20, 10);
+      final latestAt = firstAt.add(const Duration(seconds: 2));
+      final entry = AppErrorLogEntry(
+        id: 7,
+        at: firstAt,
+        source: AppErrorLogSource.flutter,
+        message: 'repeated',
+        isUnread: true,
+      );
+
+      final updated = entry.copyWith(
+        at: latestAt,
+        occurrenceCount: 3,
+        isUnread: false,
+      );
+
+      expect(updated.id, 7);
+      expect(updated.at, latestAt);
+      expect(updated.firstOccurredAt, firstAt);
+      expect(updated.occurrenceCount, 3);
+      expect(updated.isUnread, isFalse);
     });
   });
 }

@@ -409,13 +409,49 @@ void main() {
   group('AppLogsDioInterceptor — _safeJsonLike', () {
     test('截断超长字符串', () {
       final longString = 'x' * 3000;
+      AppLogsConfig.maxNetworkBodyCharacters = 2000;
       final options = makeOptions(method: 'POST', data: {'big': longString});
       interceptor.onRequest(options, _TestRequestHandler());
 
-      final data = store.network.first.request['data'] as Map<String, Object?>;
-      final value = data['big'] as String;
-      expect(value.length, lessThan(3000));
-      expect(value, endsWith('...(truncated)'));
+      final data = store.network.first.request['data'] as String;
+      expect(data.length, lessThan(3000));
+      expect(data, startsWith('{"big":"'));
+      expect(data, endsWith('...(truncated)'));
+    });
+
+    test('maxNetworkBodyCharacters=0 时不捕获 request 和 response body', () {
+      AppLogsConfig.maxNetworkBodyCharacters = 0;
+      final options = makeOptions(method: 'POST', data: {'secret': 'request'});
+      interceptor.onRequest(options, _TestRequestHandler());
+      interceptor.onResponse(
+        Response(
+          requestOptions: options,
+          statusCode: 200,
+          data: {'secret': 'response'},
+        ),
+        _TestResponseHandler(),
+      );
+
+      expect(store.network.first.request, isNot(contains('data')));
+      expect(store.network.first.response, isNot(contains('data')));
+    });
+
+    test('response body 超过配置长度时明确标记截断', () {
+      AppLogsConfig.maxNetworkBodyCharacters = 40;
+      final options = makeOptions();
+      interceptor.onRequest(options, _TestRequestHandler());
+      interceptor.onResponse(
+        Response(
+          requestOptions: options,
+          statusCode: 200,
+          data: {'message': 'response-body-' * 10},
+        ),
+        _TestResponseHandler(),
+      );
+
+      final data = store.network.first.response!['data'];
+      expect(data, isA<String>());
+      expect(data, endsWith('...(truncated)'));
     });
 
     test('截断超长列表（>50 元素）', () {

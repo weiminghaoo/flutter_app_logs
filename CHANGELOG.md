@@ -1,3 +1,14 @@
+## 0.2.0
+
+- **feat**: Added configurable automatic Error capture rules for Flutter, unhandled, and `debugPrint` sources, plus additional and ignored message patterns.
+- **feat**: Repeated identical errors can now merge within a configurable time window and display their occurrence count.
+- **feat**: Added Error source filters and an unread Error Tab badge with explicit read-state APIs.
+- **feat**: Console, Network, and Error retention capacities are now configurable, including support for zero retention.
+- **feat**: Added a configurable Network body character limit with explicit truncation markers and body capture disabling.
+- **fix**: Search fields now use a local Overlay when `AppLogPanelHost` is injected through `MaterialApp.builder`, preventing focus-time `No Overlay widget found` assertions.
+- **docs**: Documented all 0.2.0 Error management and runtime limit settings in Chinese and English.
+- **test**: Added configuration, deduplication, unread state, capture-rule, source-filter, capacity, body-limit, and narrow-viewport coverage.
+
 ## 0.1.8
 
 - **feat**: Added combined Network filters for method, HTTP status, host, and duration.

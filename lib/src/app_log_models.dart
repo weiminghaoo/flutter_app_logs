@@ -49,17 +49,52 @@ enum AppErrorLogSource {
 
 /// Error 面板中的一条错误记录。
 class AppErrorLogEntry {
+  /// Store 内的稳定 ID，用于归并更新时保留卡片状态。
+  final int id;
+
+  /// 最近一次发生时间。
   final DateTime at;
+
+  /// 第一次发生时间。
+  final DateTime firstOccurredAt;
   final AppErrorLogSource source;
   final String message;
   final String? stackTrace;
 
+  /// 当前卡片累计归并的发生次数。
+  final int occurrenceCount;
+
+  /// 当前卡片是否包含尚未查看的新错误。
+  final bool isUnread;
+
   const AppErrorLogEntry({
+    this.id = 0,
     required this.at,
+    DateTime? firstOccurredAt,
     required this.source,
     required this.message,
     this.stackTrace,
-  });
+    this.occurrenceCount = 1,
+    this.isUnread = false,
+  }) : firstOccurredAt = firstOccurredAt ?? at;
+
+  AppErrorLogEntry copyWith({
+    DateTime? at,
+    DateTime? firstOccurredAt,
+    int? occurrenceCount,
+    bool? isUnread,
+  }) {
+    return AppErrorLogEntry(
+      id: id,
+      at: at ?? this.at,
+      firstOccurredAt: firstOccurredAt ?? this.firstOccurredAt,
+      source: source,
+      message: message,
+      stackTrace: stackTrace,
+      occurrenceCount: occurrenceCount ?? this.occurrenceCount,
+      isUnread: isUnread ?? this.isUnread,
+    );
+  }
 }
 
 /// Network 请求当前所处的生命周期状态。
@@ -224,11 +259,6 @@ class AppLogStore extends ChangeNotifier {
   /// 全局唯一实例
   static final AppLogStore instance = AppLogStore._();
 
-  // ── 容量上限 ──────────────────────────────────────────────────────────────
-  static const int _maxConsole = 500;
-  static const int _maxNetwork = 200;
-  static const int _maxErrors = 200;
-
   // ── 内部存储 ──────────────────────────────────────────────────────────────
   final List<AppConsoleLogEntry> _console = <AppConsoleLogEntry>[];
   final List<AppErrorLogEntry> _errors = <AppErrorLogEntry>[];
@@ -237,11 +267,15 @@ class AppLogStore extends ChangeNotifier {
   final List<String> _networkOrder = <String>[];
 
   bool _notifyScheduledAfterFrame = false;
+  int _nextErrorId = 1;
 
   // ── 只读访问器 ────────────────────────────────────────────────────────────
   List<AppConsoleLogEntry> get console => List.unmodifiable(_console);
 
   List<AppErrorLogEntry> get errors => List.unmodifiable(_errors);
+
+  /// 尚未在 Error Tab 中查看的错误卡片数。
+  int get unreadErrorCount => _errors.where((entry) => entry.isUnread).length;
 
   List<AppNetworkLogEntry> get network => List.unmodifiable(
     _networkOrder.map((id) => _networkById[id]).whereType<AppNetworkLogEntry>(),
@@ -257,6 +291,18 @@ class AppLogStore extends ChangeNotifier {
   void clearErrors() {
     if (_errors.isEmpty) return;
     _errors.clear();
+    _notifyListenersSafely();
+  }
+
+  /// 将当前 Error 卡片全部标记为已读。
+  void markErrorsRead() {
+    if (!_errors.any((entry) => entry.isUnread)) return;
+    for (var index = 0; index < _errors.length; index++) {
+      final entry = _errors[index];
+      if (entry.isUnread) {
+        _errors[index] = entry.copyWith(isUnread: false);
+      }
+    }
     _notifyListenersSafely();
   }
 
@@ -287,8 +333,9 @@ class AppLogStore extends ChangeNotifier {
         extra: extra,
       ),
     );
-    if (_console.length > _maxConsole) {
-      _console.removeRange(_maxConsole, _console.length);
+    final maxEntries = AppLogsConfig.maxConsoleEntries;
+    if (_console.length > maxEntries) {
+      _console.removeRange(maxEntries, _console.length);
     }
     _notifyListenersSafely();
   }
@@ -297,19 +344,51 @@ class AppLogStore extends ChangeNotifier {
     required AppErrorLogSource source,
     required String message,
     StackTrace? stackTrace,
+    DateTime? at,
   }) {
     if (!AppLogsConfig.enabled) return;
-    _errors.insert(
-      0,
-      AppErrorLogEntry(
-        at: DateTime.now(),
-        source: source,
-        message: message,
-        stackTrace: stackTrace?.toString(),
-      ),
-    );
-    if (_errors.length > _maxErrors) {
-      _errors.removeRange(_maxErrors, _errors.length);
+    final occurredAt = at ?? DateTime.now();
+    final stackTraceText = stackTrace?.toString();
+    final mergeWindow = AppLogsConfig.errorMergeWindow;
+    final mergeIndex =
+        AppLogsConfig.mergeRepeatedErrors
+            ? _errors.indexWhere((entry) {
+              final elapsed = occurredAt.difference(entry.at);
+              return entry.source == source &&
+                  entry.message == message &&
+                  entry.stackTrace == stackTraceText &&
+                  !elapsed.isNegative &&
+                  elapsed <= mergeWindow;
+            })
+            : -1;
+
+    if (mergeIndex >= 0) {
+      final previous = _errors.removeAt(mergeIndex);
+      _errors.insert(
+        0,
+        previous.copyWith(
+          at: occurredAt,
+          occurrenceCount: previous.occurrenceCount + 1,
+          isUnread: true,
+        ),
+      );
+    } else {
+      _errors.insert(
+        0,
+        AppErrorLogEntry(
+          id: _nextErrorId++,
+          at: occurredAt,
+          source: source,
+          message: message,
+          stackTrace: stackTraceText,
+          isUnread: true,
+        ),
+      );
+    }
+
+    final maxEntries = AppLogsConfig.maxErrorEntries;
+    if (_errors.length > maxEntries) {
+      _errors.removeRange(maxEntries, _errors.length);
     }
     _notifyListenersSafely();
   }
@@ -397,12 +476,13 @@ class AppLogStore extends ChangeNotifier {
     _networkById[id] = entry;
     _networkOrder.remove(id);
     _networkOrder.insert(0, id);
-    if (_networkOrder.length > _maxNetwork) {
-      final overflow = _networkOrder.sublist(_maxNetwork);
+    final maxEntries = AppLogsConfig.maxNetworkEntries;
+    if (_networkOrder.length > maxEntries) {
+      final overflow = _networkOrder.sublist(maxEntries);
       for (final removeId in overflow) {
         _networkById.remove(removeId);
       }
-      _networkOrder.removeRange(_maxNetwork, _networkOrder.length);
+      _networkOrder.removeRange(maxEntries, _networkOrder.length);
     }
     _notifyListenersSafely();
   }

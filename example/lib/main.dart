@@ -37,12 +37,25 @@ void main() {
   //   enabled         → 主开关。关闭后所有日志写入和 UI 渲染均短路，零开销。
   //   consoleMinLevel → 低于此级别的 Console 日志不会被记录。
   //   maskHeaders     → 是否脱敏 Authorization / Token / Cookie 等敏感 Header。
+  //   max*Entries     → Console / Network / Error 各自的容量上限。
+  //   maxNetworkBodyCharacters → 单个请求或响应 body 的最大字符数。
+  //   errorCaptureRules → 自动 Error 来源、附加起始模式和忽略模式。
+  //   mergeRepeatedErrors / errorMergeWindow → 重复 Error 归并策略。
   //   onCopySuccess   → 复制成功后的回调。插件不内置 Toast，由接入方决定提示方式。
   //   theme           → 自定义面板配色。不传则使用默认主题。
   AppLogsConfig.init(
     enabled: true,
     consoleMinLevel: AppLogLevel.debug,
     maskHeaders: true,
+    maxConsoleEntries: 500,
+    maxNetworkEntries: 200,
+    maxErrorEntries: 200,
+    maxNetworkBodyCharacters: 100000,
+    errorCaptureRules: AppErrorCaptureRules(
+      additionalConsolePatterns: [RegExp(r'^FATAL:')],
+    ),
+    mergeRepeatedErrors: true,
+    errorMergeWindow: const Duration(seconds: 30),
     onCopySuccess: (copiedText) {
       // 这里演示一个简单的 print，实际项目中替换为你的 Toast / SnackBar
       print('[onCopySuccess] 已复制 ${copiedText.length} 个字符');

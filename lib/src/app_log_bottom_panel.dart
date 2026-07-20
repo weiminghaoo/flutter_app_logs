@@ -33,6 +33,7 @@ class _BottomPanelState extends State<_BottomPanel>
   bool _showNetworkFilters = false;
   bool _showConsoleFilters = false;
   bool _showErrorFilters = false;
+  bool _markErrorsReadScheduled = false;
 
   bool get _isToolbarVisible => switch (_selectedTabIndex) {
     0 => _showNetworkFilters,
@@ -58,6 +59,7 @@ class _BottomPanelState extends State<_BottomPanel>
   void _handleTabChanged() {
     if (_selectedTabIndex == _tabController.index) return;
     setState(() => _selectedTabIndex = _tabController.index);
+    _scheduleMarkErrorsReadIfVisible();
   }
 
   @override
@@ -69,6 +71,7 @@ class _BottomPanelState extends State<_BottomPanel>
       _showNetworkFilters = false;
       _showConsoleFilters = false;
       _showErrorFilters = false;
+      _scheduleMarkErrorsReadIfVisible();
     }
   }
 
@@ -155,6 +158,71 @@ class _BottomPanelState extends State<_BottomPanel>
         _showErrorFilters = !_showErrorFilters;
       }
     });
+  }
+
+  void _scheduleMarkErrorsReadIfVisible() {
+    if (_markErrorsReadScheduled ||
+        !widget.open ||
+        _selectedTabIndex != 2 ||
+        AppLogStore.instance.unreadErrorCount == 0) {
+      return;
+    }
+    _markErrorsReadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _markErrorsReadScheduled = false;
+      if (!mounted || !widget.open || _selectedTabIndex != 2) return;
+      AppLogStore.instance.markErrorsRead();
+    });
+  }
+
+  Widget _buildTabBar(AppLogsTheme theme, int unreadErrorCount) {
+    return TabBar(
+      controller: _tabController,
+      labelColor: theme.primary,
+      unselectedLabelColor: _LP.textSec,
+      indicatorColor: theme.primary,
+      dividerColor: _LP.border,
+      indicatorWeight: 3,
+      labelPadding: EdgeInsets.zero,
+      unselectedLabelStyle: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
+      tabs: [
+        const Tab(text: 'Network'),
+        const Tab(text: 'Console'),
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Error'),
+              if (unreadErrorCount > 0) ...[
+                const SizedBox(width: 5),
+                Container(
+                  key: const Key('app_logs_error_unread_badge'),
+                  height: 18,
+                  constraints: const BoxConstraints(minWidth: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: theme.error,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    unreadErrorCount > 99 ? '99+' : '$unreadErrorCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -293,23 +361,17 @@ class _BottomPanelState extends State<_BottomPanel>
                     children: [
                       Material(
                         color: _LP.bg,
-                        child: TabBar(
-                          controller: _tabController,
-                          labelColor: theme.primary,
-                          unselectedLabelColor: _LP.textSec,
-                          indicatorColor: theme.primary,
-                          dividerColor: _LP.border,
-                          indicatorWeight: 3,
-                          unselectedLabelStyle: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          tabs: const [
-                            Tab(text: 'Network'),
-                            Tab(text: 'Console'),
-                            Tab(text: 'Error'),
-                          ],
-                        ),
+                        child:
+                            widget.open
+                                ? AnimatedBuilder(
+                                  animation: AppLogStore.instance,
+                                  builder:
+                                      (context, _) => _buildTabBar(
+                                        theme,
+                                        AppLogStore.instance.unreadErrorCount,
+                                      ),
+                                )
+                                : _buildTabBar(theme, 0),
                       ),
                       Expanded(
                         // 面板关闭时不订阅 AppLogStore，避免日志写入触发不必要的 rebuild
@@ -323,6 +385,7 @@ class _BottomPanelState extends State<_BottomPanel>
                                     final network =
                                         AppLogStore.instance.network;
                                     final errors = AppLogStore.instance.errors;
+                                    _scheduleMarkErrorsReadIfVisible();
 
                                     final resolvedSelectedId =
                                         widget.selectedNetworkId;

@@ -26,7 +26,7 @@ Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，�
 ## 特性
 
 - **Console 日志面板** — 查看用户通过 `AppConsoleLogger` 主动记录的生命周期和流程日志，支持级别筛选和关键词搜索
-- **Error 错误面板** — 自动捕获 `FlutterError`、根 isolate 未处理异常，以及 `debugPrint` 输出的 Network Error / App Error 多行错误块；默认显示三行摘要，可展开完整错误与堆栈
+- **Error 错误面板** — 自动捕获 `FlutterError`、根 isolate 未处理异常，以及 `debugPrint` 多行错误块；支持捕获规则、来源筛选、重复归并和未读数量
 - **Network 日志面板** — 检查 HTTP 请求、响应和错误，显示耗时、Headers、请求体、响应体，并支持 method / status / host / 耗时组合筛选
 - **请求生命周期** — 请求发出后立即显示 Pending，结束后更新为成功、错误或 Cancelled
 - **Copy as cURL** — 从请求详情一键复制可复现的 cURL 命令，不会自动重放请求
@@ -41,7 +41,7 @@ Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，�
 
 ```yaml
 dependencies:
-  flutter_app_logs: ^0.1.8
+  flutter_app_logs: ^0.2.0
 ```
 
 ```bash
@@ -173,6 +173,34 @@ debugPrint('   Response: {"code": 500}');
 
 `AppConsoleLogger.error(...)` 仍会进入 **Console** 面板。它适合用户主动记录生命周期、业务流程和可预期状态；运行时异常和控制台错误块则进入独立的 **Error** 面板。
 
+### 配置自动捕获规则
+
+通过 `AppErrorCaptureRules` 可以分别控制三类自动来源，并扩展或忽略 `debugPrint` 错误模式：
+
+```dart
+AppLogsConfig.init(
+  enabled: kDebugMode,
+  errorCaptureRules: AppErrorCaptureRules(
+    captureFlutterErrors: true,
+    captureUnhandledErrors: true,
+    captureConsoleErrors: true,
+    includeDefaultConsolePatterns: true,
+    additionalConsolePatterns: [
+      RegExp(r'^FATAL:'),
+      '[Payment Failure]',
+    ],
+    ignoredPatterns: [
+      'A known harmless framework warning',
+    ],
+  ),
+);
+```
+
+- `additionalConsolePatterns` 用于识别新的多行错误块起始行；`String` 使用包含匹配，`RegExp` 使用正则匹配。
+- `ignoredPatterns` 在自动错误完成归并前过滤整条消息，适用于 Flutter、Unhandled 和 Console 三类自动来源。
+- 捕获开关和忽略规则只影响自动捕获；显式调用 `AppLogStore.logError()` 的错误始终保留。
+- 无论是否捕获，插件都会继续转发原来的 Flutter / Platform 错误 handler，并保留控制台输出。
+
 ### 手动注入错误
 
 对于已经在业务代码中捕获、不会到达 Flutter 全局错误出口的异常，可以直接写入 Error 面板：
@@ -195,12 +223,47 @@ try {
 
 ```dart
 final List<AppErrorLogEntry> errors = AppLogStore.instance.errors;
+final int unreadCount = AppLogStore.instance.unreadErrorCount;
+
+// 手动把当前 Error 标记为已读。
+AppLogStore.instance.markErrorsRead();
 
 // 仅清空 Error，不影响 Network 和 Console。
 AppLogStore.instance.clearErrors();
 ```
 
-Error 最多保留 200 条，最新记录排在最前。每张错误卡默认显示三行摘要，可展开查看完整错误和堆栈，也可通过卡片标题栏的复制按钮复制完整内容。
+完全相同的 `source + message + stackTrace` 默认会在 30 秒内归并为一张卡片，并显示 `×N` 次数。`firstOccurredAt` 保存首次时间，`at` 保存最近时间，`occurrenceCount` 保存次数。已读错误再次发生会重新变为未读，但未读 Badge 按错误卡片数计算；进入 Error Tab 后当前错误会自动标记为已读。
+
+展开 Error 搜索工具栏后，可以按 Flutter、Unhandled 或 Console 来源筛选。Console 来源仍会在卡片上细分显示为 NETWORK、APP 或 CONSOLE。
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_error_filters.png" width="360" alt="Error 来源筛选" />
+</p>
+
+归并行为可以配置或关闭：
+
+```dart
+AppLogsConfig.init(
+  mergeRepeatedErrors: true,
+  errorMergeWindow: const Duration(seconds: 30),
+);
+```
+
+### 日志容量与 Network body 长度
+
+```dart
+AppLogsConfig.init(
+  maxConsoleEntries: 500,
+  maxNetworkEntries: 200,
+  maxErrorEntries: 200,
+  maxNetworkBodyCharacters: 100000,
+);
+```
+
+- 三类容量都可以设为 `0`，表示不保留该类记录。
+- 超出容量时优先淘汰最旧记录。
+- `maxNetworkBodyCharacters` 同时作用于 request 和 response body；设为 `0` 时完全不捕获 body。
+- body 超限后会保存带 `...(truncated)` 的文本。详情复制和 Copy as cURL 使用的也是这份捕获数据，因此截断后的 cURL 不一定能直接重放完整请求。
 
 ## 完整示例
 
@@ -760,6 +823,13 @@ class _DemoHomePageState extends State<DemoHomePage> {
 | `enabled` | `bool` | `false` | 主开关 — 控制所有日志写入和 UI 渲染 |
 | `consoleMinLevel` | `AppLogLevel` | `.debug` | Console 最低日志级别 |
 | `maskHeaders` | `bool` | `false` | 是否脱敏敏感 Headers（Authorization 等） |
+| `maxConsoleEntries` | `int` | `500` | Console 最大保留条数；0 表示不保留 |
+| `maxNetworkEntries` | `int` | `200` | Network 最大保留条数；0 表示不保留 |
+| `maxErrorEntries` | `int` | `200` | Error 最大保留卡片数；0 表示不保留 |
+| `maxNetworkBodyCharacters` | `int` | `100000` | 单个 request / response body 最大字符数；0 表示不捕获 |
+| `errorCaptureRules` | `AppErrorCaptureRules` | 默认全部捕获 | 自动 Error 来源、附加模式和忽略模式 |
+| `mergeRepeatedErrors` | `bool` | `true` | 是否归并重复 Error |
+| `errorMergeWindow` | `Duration` | `30s` | 重复 Error 的归并窗口 |
 | `onCopySuccess` | `void Function(String)?` | `null` | 复制成功后的回调 |
 | `theme` | `AppLogsTheme` | `defaultTheme` | 自定义主题色板 |
 
@@ -808,14 +878,16 @@ store.logNetworkError(id: '1', at: DateTime.now(), request: {...}, error: {...})
 List<AppConsoleLogEntry> logs = store.console;
 List<AppErrorLogEntry> errors = store.errors;
 List<AppNetworkLogEntry> reqs = store.network;
+int unreadErrors = store.unreadErrorCount;
 
 // 清空
 store.clearConsole();
+store.markErrorsRead();
 store.clearErrors();
 store.clearNetwork();
 ```
 
-容量限制：Console 500 条、Network 200 条、Error 200 条，超出自动淘汰最旧记录。
+默认容量：Console 500 条、Network 200 条、Error 200 条，可通过 `AppLogsConfig` 调整。
 
 ### AppLogsDioInterceptor
 
@@ -917,7 +989,7 @@ AppLogsConfig.init(
 
 ### Q: 日志有数量上限吗？
 
-Console 上限 500 条，Network 上限 200 条，Error 上限 200 条。超出后自动淘汰最旧的记录（FIFO）。
+默认上限为 Console 500 条、Network 200 条、Error 200 条，可通过 `AppLogsConfig` 调整。超出后自动淘汰最旧记录。
 
 ### Q: 与现有的 Dio 拦截器冲突吗？
 

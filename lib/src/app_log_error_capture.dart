@@ -18,6 +18,25 @@ class _AppErrorCapture {
     r'(?:\[ERROR:flutter\/[^\]]+\]\s*)?Unhandled Exception:)',
   );
 
+  bool _matchesPattern(String message, Pattern pattern) => switch (pattern) {
+    RegExp expression => expression.hasMatch(message),
+    _ => message.contains(pattern),
+  };
+
+  bool _isIgnored(String message) => AppLogsConfig
+      .errorCaptureRules
+      .ignoredPatterns
+      .any((pattern) => _matchesPattern(message, pattern));
+
+  bool _isConsoleErrorStart(String message) {
+    final rules = AppLogsConfig.errorCaptureRules;
+    return (rules.includeDefaultConsolePatterns &&
+            _consoleErrorStart.hasMatch(message)) ||
+        rules.additionalConsolePatterns.any(
+          (pattern) => _matchesPattern(message, pattern),
+        );
+  }
+
   int _attachmentCount = 0;
   DebugPrintCallback? _previousDebugPrint;
   FlutterExceptionHandler? _previousFlutterError;
@@ -51,11 +70,15 @@ class _AppErrorCapture {
 
     _previousFlutterError = FlutterError.onError;
     _installedFlutterError = (FlutterErrorDetails details) {
-      AppLogStore.instance.logError(
-        source: AppErrorLogSource.flutter,
-        message: details.exceptionAsString(),
-        stackTrace: details.stack,
-      );
+      final message = details.exceptionAsString();
+      final rules = AppLogsConfig.errorCaptureRules;
+      if (rules.captureFlutterErrors && !_isIgnored(message)) {
+        AppLogStore.instance.logError(
+          source: AppErrorLogSource.flutter,
+          message: message,
+          stackTrace: details.stack,
+        );
+      }
       final previous = _previousFlutterError;
       if (previous != null) {
         previous(details);
@@ -67,11 +90,15 @@ class _AppErrorCapture {
 
     _previousPlatformError = ui.PlatformDispatcher.instance.onError;
     _installedPlatformError = (Object error, StackTrace stackTrace) {
-      AppLogStore.instance.logError(
-        source: AppErrorLogSource.unhandled,
-        message: error.toString(),
-        stackTrace: stackTrace,
-      );
+      final message = error.toString();
+      final rules = AppLogsConfig.errorCaptureRules;
+      if (rules.captureUnhandledErrors && !_isIgnored(message)) {
+        AppLogStore.instance.logError(
+          source: AppErrorLogSource.unhandled,
+          message: message,
+          stackTrace: stackTrace,
+        );
+      }
       return _previousPlatformError?.call(error, stackTrace) ?? false;
     };
     ui.PlatformDispatcher.instance.onError = _installedPlatformError;
@@ -107,12 +134,13 @@ class _AppErrorCapture {
   void _captureDebugPrint(String? message) {
     if (_consoleCaptureSuppressionDepth > 0 ||
         !AppLogsConfig.enabled ||
+        !AppLogsConfig.errorCaptureRules.captureConsoleErrors ||
         message == null ||
         message.isEmpty) {
       return;
     }
 
-    if (_consoleErrorStart.hasMatch(message)) {
+    if (_isConsoleErrorStart(message)) {
       _flushConsoleError();
     } else if (_consoleErrorBuffer.isEmpty) {
       return;
@@ -134,6 +162,8 @@ class _AppErrorCapture {
 
     final message = _consoleErrorBuffer.toString();
     _consoleErrorBuffer.clear();
+    final rules = AppLogsConfig.errorCaptureRules;
+    if (!rules.captureConsoleErrors || _isIgnored(message)) return;
     AppLogStore.instance.logError(
       source: AppErrorLogSource.console,
       message: message,

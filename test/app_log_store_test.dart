@@ -23,6 +23,27 @@ void main() {
     store.clearErrors();
   });
 
+  test('容量设为 0 时不保留对应日志', () {
+    AppLogsConfig.maxConsoleEntries = 0;
+    AppLogsConfig.maxNetworkEntries = 0;
+    AppLogsConfig.maxErrorEntries = 0;
+
+    store.logConsole(level: AppLogLevel.info, message: 'console');
+    store.logNetworkRequest(
+      id: 'network',
+      at: DateTime.now(),
+      path: '/health',
+      method: 'GET',
+      request: const <String, Object?>{},
+    );
+    store.logError(source: AppErrorLogSource.flutter, message: 'error');
+
+    expect(store.console, isEmpty);
+    expect(store.network, isEmpty);
+    expect(store.errors, isEmpty);
+    expect(store.unreadErrorCount, 0);
+  });
+
   group('AppLogStore — Error 日志', () {
     test('Error 与 Console 使用独立存储', () {
       store.logConsole(level: AppLogLevel.error, message: 'manual flow log');
@@ -83,6 +104,89 @@ void main() {
         throwsUnsupportedError,
       );
     });
+
+    test('相同 Error 在窗口内归并并累计次数', () {
+      final firstAt = DateTime(2026, 7, 20, 10);
+      final stackTrace = StackTrace.fromString('#0 build (widget.dart:1:1)');
+
+      store.logError(
+        source: AppErrorLogSource.flutter,
+        message: 'duplicate',
+        stackTrace: stackTrace,
+        at: firstAt,
+      );
+      final firstId = store.errors.single.id;
+      store.logError(
+        source: AppErrorLogSource.flutter,
+        message: 'duplicate',
+        stackTrace: stackTrace,
+        at: firstAt.add(const Duration(seconds: 10)),
+      );
+
+      expect(store.errors, hasLength(1));
+      expect(store.errors.single.id, firstId);
+      expect(store.errors.single.firstOccurredAt, firstAt);
+      expect(store.errors.single.at, firstAt.add(const Duration(seconds: 10)));
+      expect(store.errors.single.occurrenceCount, 2);
+      expect(store.unreadErrorCount, 1);
+    });
+
+    test('超出归并窗口或关闭归并时创建新 Error 卡片', () {
+      final firstAt = DateTime(2026, 7, 20, 10);
+      store.logError(
+        source: AppErrorLogSource.console,
+        message: 'outside window',
+        at: firstAt,
+      );
+      store.logError(
+        source: AppErrorLogSource.console,
+        message: 'outside window',
+        at: firstAt.add(const Duration(seconds: 31)),
+      );
+      expect(store.errors, hasLength(2));
+
+      store.clearErrors();
+      AppLogsConfig.mergeRepeatedErrors = false;
+      store.logError(
+        source: AppErrorLogSource.console,
+        message: 'merge disabled',
+      );
+      store.logError(
+        source: AppErrorLogSource.console,
+        message: 'merge disabled',
+      );
+      expect(store.errors, hasLength(2));
+    });
+
+    test('已读 Error 再次发生时重新变为一个未读卡片', () {
+      store.logError(source: AppErrorLogSource.unhandled, message: 'again');
+      expect(store.unreadErrorCount, 1);
+
+      store.markErrorsRead();
+      expect(store.unreadErrorCount, 0);
+      expect(store.errors.single.isUnread, isFalse);
+
+      store.logError(source: AppErrorLogSource.unhandled, message: 'again');
+      expect(store.errors, hasLength(1));
+      expect(store.errors.single.occurrenceCount, 2);
+      expect(store.errors.single.isUnread, isTrue);
+      expect(store.unreadErrorCount, 1);
+    });
+
+    test('Error 容量可配置', () {
+      AppLogsConfig.maxErrorEntries = 2;
+      for (var i = 0; i < 3; i++) {
+        store.logError(
+          source: AppErrorLogSource.flutter,
+          message: 'configured-$i',
+        );
+      }
+
+      expect(store.errors, hasLength(2));
+      expect(store.errors.first.message, 'configured-2');
+      expect(store.errors.last.message, 'configured-1');
+      expect(store.unreadErrorCount, 2);
+    });
   });
 
   group('AppLogStore — Console 日志', () {
@@ -136,6 +240,17 @@ void main() {
       expect(store.console.length, 500);
       // 最新的是 msg-519
       expect(store.console.first.message, 'msg-519');
+    });
+
+    test('Console 容量可配置', () {
+      AppLogsConfig.maxConsoleEntries = 2;
+      for (var i = 0; i < 3; i++) {
+        store.logConsole(level: AppLogLevel.info, message: 'limited-$i');
+      }
+      expect(store.console.map((entry) => entry.message), [
+        'limited-2',
+        'limited-1',
+      ]);
     });
 
     test('clearConsole 清除所有 Console 日志', () {
@@ -297,6 +412,23 @@ void main() {
       expect(store.network.length, 200);
       // 最新的是 req-209
       expect(store.network.first.id, 'req-209');
+    });
+
+    test('Network 容量可配置', () {
+      AppLogsConfig.maxNetworkEntries = 2;
+      for (var i = 0; i < 3; i++) {
+        store.logNetworkRequest(
+          id: 'limited-$i',
+          at: DateTime.now(),
+          path: '/limited/$i',
+          method: 'GET',
+          request: {},
+        );
+      }
+      expect(store.network.map((entry) => entry.id), [
+        'limited-2',
+        'limited-1',
+      ]);
     });
 
     test('enabled=false 时不写入网络日志', () {

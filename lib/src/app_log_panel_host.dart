@@ -21,6 +21,47 @@ class AppLogPanelHost extends StatefulWidget {
   State<AppLogPanelHost> createState() => _AppLogPanelHostState();
 }
 
+/// 为通过 `MaterialApp.builder` 注入的调试面板提供独立的 Overlay。
+///
+/// 此时应用 Navigator 的 Overlay 位于 [AppLogPanelHost.child] 内部，和面板
+/// 是兄弟节点，面板中的 TextField 无法使用它来显示文字选择层。
+class _AppLogLocalOverlay extends StatefulWidget {
+  final Widget child;
+
+  const _AppLogLocalOverlay({required this.child});
+
+  @override
+  State<_AppLogLocalOverlay> createState() => _AppLogLocalOverlayState();
+}
+
+class _AppLogLocalOverlayState extends State<_AppLogLocalOverlay> {
+  late final OverlayEntry _entry;
+
+  @override
+  void initState() {
+    super.initState();
+    _entry = OverlayEntry(builder: (_) => widget.child);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AppLogLocalOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _entry.markNeedsBuild();
+  }
+
+  @override
+  void dispose() {
+    _entry.remove();
+    _entry.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Overlay(clipBehavior: Clip.none, initialEntries: [_entry]);
+  }
+}
+
 class _AppLogPanelHostState extends State<AppLogPanelHost> {
   bool _open = false;
   String? _selectedNetworkId;
@@ -162,15 +203,17 @@ class _AppLogPanelHostState extends State<AppLogPanelHost> {
           ),
 
         // 底部调试面板
-        _BottomPanel(
-          open: _open,
-          selectedNetworkId: _selectedNetworkId,
-          onSelectNetwork: (id) => setState(() => _selectedNetworkId = id),
-          onClose:
-              () => setState(() {
-                _open = false;
-                _selectedNetworkId = null;
-              }),
+        _AppLogLocalOverlay(
+          child: _BottomPanel(
+            open: _open,
+            selectedNetworkId: _selectedNetworkId,
+            onSelectNetwork: (id) => setState(() => _selectedNetworkId = id),
+            onClose:
+                () => setState(() {
+                  _open = false;
+                  _selectedNetworkId = null;
+                }),
+          ),
         ),
 
         // 复制成功提示放在宿主 Stack 的最后一层，确保盖在日志面板之上。

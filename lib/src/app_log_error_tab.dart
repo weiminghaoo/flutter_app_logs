@@ -16,6 +16,7 @@ class _ErrorTab extends StatefulWidget {
 
 class _ErrorTabState extends State<_ErrorTab> {
   String _searchQuery = '';
+  AppErrorLogSource? _selectedSource;
   late final TextEditingController _searchController;
   late final FocusNode _searchFocusNode;
 
@@ -43,9 +44,10 @@ class _ErrorTabState extends State<_ErrorTab> {
     }
     if (oldWidget.showToolbar && !widget.showToolbar) {
       _searchFocusNode.unfocus();
-      if (_searchQuery.isNotEmpty) {
+      if (_searchQuery.isNotEmpty || _selectedSource != null) {
         _searchController.clear();
         _searchQuery = '';
+        _selectedSource = null;
       }
     }
   }
@@ -66,6 +68,9 @@ class _ErrorTabState extends State<_ErrorTab> {
     final query = _searchQuery.toLowerCase();
     final filteredEntries =
         widget.entries.where((entry) {
+          if (_selectedSource != null && entry.source != _selectedSource) {
+            return false;
+          }
           if (query.isEmpty) return true;
           return entry.message.toLowerCase().contains(query) ||
               (entry.stackTrace?.toLowerCase().contains(query) ?? false) ||
@@ -89,47 +94,112 @@ class _ErrorTabState extends State<_ErrorTab> {
                       color: _LP.paper,
                       border: Border(bottom: BorderSide(color: _LP.border)),
                     ),
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      decoration: InputDecoration(
-                        hintText: 'Search errors...',
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          size: 20,
-                          color: _LP.textSec,
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          decoration: InputDecoration(
+                            hintText: 'Search errors...',
+                            prefixIcon: const Icon(
+                              Icons.search,
+                              size: 20,
+                              color: _LP.textSec,
+                            ),
+                            suffixIcon:
+                                _searchQuery.isNotEmpty
+                                    ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 16),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                    )
+                                    : null,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: _LP.border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: _LP.border),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: theme.primary),
+                            ),
+                          ),
+                          textInputAction: TextInputAction.search,
+                          onChanged:
+                              (value) => setState(() => _searchQuery = value),
                         ),
-                        suffixIcon:
-                            _searchQuery.isNotEmpty
-                                ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 16),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                  },
-                                )
-                                : null,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 34,
+                          child: Row(
+                            children: [
+                              const SizedBox(
+                                width: 54,
+                                child: Text(
+                                  'Source',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: _LP.textSec,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _FilterChip(
+                                        key: const Key(
+                                          'app_logs_error_filter_source_all',
+                                        ),
+                                        label: 'All',
+                                        selected: _selectedSource == null,
+                                        onSelected:
+                                            (_) => setState(
+                                              () => _selectedSource = null,
+                                            ),
+                                      ),
+                                      for (final source
+                                          in AppErrorLogSource.values) ...[
+                                        const SizedBox(width: 8),
+                                        _FilterChip(
+                                          key: Key(
+                                            'app_logs_error_filter_source_${source.name}',
+                                          ),
+                                          label: switch (source) {
+                                            AppErrorLogSource.flutter =>
+                                              'Flutter',
+                                            AppErrorLogSource.unhandled =>
+                                              'Unhandled',
+                                            AppErrorLogSource.console =>
+                                              'Console',
+                                          },
+                                          selected: _selectedSource == source,
+                                          onSelected:
+                                              (_) => setState(
+                                                () => _selectedSource = source,
+                                              ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: _LP.border),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: _LP.border),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: theme.primary),
-                        ),
-                      ),
-                      textInputAction: TextInputAction.search,
-                      onChanged:
-                          (value) => setState(() => _searchQuery = value),
+                      ],
                     ),
                   )
                   : const SizedBox.shrink(),
@@ -150,7 +220,7 @@ class _ErrorTabState extends State<_ErrorTab> {
                     itemBuilder: (context, index) {
                       final entry = filteredEntries[index];
                       return _ErrorLogCard(
-                        key: ObjectKey(entry),
+                        key: ValueKey(entry.id),
                         entry: entry,
                         sourceLabel: _sourceLabel(entry),
                       );
@@ -373,6 +443,23 @@ class _ErrorLogCardState extends State<_ErrorLogCard> {
             fontFamily: 'SF Mono',
           ),
         ),
+        if (widget.entry.occurrenceCount > 1)
+          Container(
+            key: const Key('app_logs_error_occurrence_count'),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: errorColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '×${widget.entry.occurrenceCount}',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: errorColor,
+              ),
+            ),
+          ),
       ],
     );
   }

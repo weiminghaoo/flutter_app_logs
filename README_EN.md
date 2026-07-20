@@ -23,7 +23,7 @@ An in-app debug panel for Flutter — inspect **Network requests**, opt-in **Con
 ## Features
 
 - **Console Log Panel** — view lifecycle and flow logs explicitly recorded with `AppConsoleLogger`, with level filtering and keyword search
-- **Error Panel** — automatically captures `FlutterError`, unhandled root-isolate exceptions, and multiline Network Error / App Error blocks emitted through `debugPrint`; shows a three-line summary by default and expands to the full error and stack trace
+- **Error Panel** — automatically captures `FlutterError`, unhandled root-isolate exceptions, and multiline `debugPrint` errors, with configurable rules, source filters, duplicate merging, and unread counts
 - **Network Log Panel** — inspect HTTP requests, responses, and errors with timing, headers, and body, plus combined method / status / host / duration filters
 - **Request lifecycle** — requests appear as Pending immediately, then update to success, error, or Cancelled
 - **Copy as cURL** — copy a reproducible cURL command from request details without replaying it automatically
@@ -38,7 +38,7 @@ An in-app debug panel for Flutter — inspect **Network requests**, opt-in **Con
 
 ```yaml
 dependencies:
-  flutter_app_logs: ^0.1.8
+  flutter_app_logs: ^0.2.0
 ```
 
 ```bash
@@ -169,6 +169,34 @@ debugPrint('   Response: {"code": 500}');
 
 `AppConsoleLogger.error(...)` still writes to the **Console** panel. Use it for explicit lifecycle, business-flow, and expected-state logs; runtime exceptions and captured console error blocks belong to the separate **Error** panel.
 
+### Configure automatic capture rules
+
+Use `AppErrorCaptureRules` to control each automatic source and extend or ignore `debugPrint` error patterns:
+
+```dart
+AppLogsConfig.init(
+  enabled: kDebugMode,
+  errorCaptureRules: AppErrorCaptureRules(
+    captureFlutterErrors: true,
+    captureUnhandledErrors: true,
+    captureConsoleErrors: true,
+    includeDefaultConsolePatterns: true,
+    additionalConsolePatterns: [
+      RegExp(r'^FATAL:'),
+      '[Payment Failure]',
+    ],
+    ignoredPatterns: [
+      'A known harmless framework warning',
+    ],
+  ),
+);
+```
+
+- `additionalConsolePatterns` identifies new multiline error starts. Strings use contains matching; `RegExp` values use regular-expression matching.
+- `ignoredPatterns` filters the completed automatic message for Flutter, Unhandled, and Console sources.
+- Capture switches and ignored patterns affect automatic capture only. Explicit `AppLogStore.logError()` calls are always retained.
+- The package still forwards previous Flutter / Platform handlers and preserves console output whether or not an error is captured.
+
 ### Manual error injection
 
 If business code catches an exception before it reaches Flutter's global error handlers, write it directly to the Error panel:
@@ -191,12 +219,47 @@ Use `.flutter` for framework errors, `.unhandled` for unhandled exceptions, and 
 
 ```dart
 final List<AppErrorLogEntry> errors = AppLogStore.instance.errors;
+final int unreadCount = AppLogStore.instance.unreadErrorCount;
+
+// Explicitly mark current Error entries as read.
+AppLogStore.instance.markErrorsRead();
 
 // Clears only Error entries; Network and Console remain unchanged.
 AppLogStore.instance.clearErrors();
 ```
 
-The store keeps up to 200 Error entries, newest first. Each card shows a three-line summary by default, expands to the full error and stack trace, and provides a header copy button for the complete content.
+Identical `source + message + stackTrace` values merge into one card within 30 seconds by default and display an `×N` count. `firstOccurredAt` stores the first time, `at` stores the latest time, and `occurrenceCount` stores the total. A repeated read error becomes unread again, while the badge counts cards rather than occurrences. Opening the Error Tab marks the currently visible errors as read.
+
+Expand the Error search toolbar to filter by Flutter, Unhandled, or Console source. Console entries can still display NETWORK, APP, or CONSOLE labels on their cards.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_error_filters.png" width="360" alt="Error source filters" />
+</p>
+
+Duplicate merging is configurable:
+
+```dart
+AppLogsConfig.init(
+  mergeRepeatedErrors: true,
+  errorMergeWindow: const Duration(seconds: 30),
+);
+```
+
+### Log capacity and Network body length
+
+```dart
+AppLogsConfig.init(
+  maxConsoleEntries: 500,
+  maxNetworkEntries: 200,
+  maxErrorEntries: 200,
+  maxNetworkBodyCharacters: 100000,
+);
+```
+
+- Set any entry capacity to `0` to retain no records for that category.
+- The oldest records are evicted first when a limit is exceeded.
+- `maxNetworkBodyCharacters` applies to both request and response bodies; set it to `0` to capture no body.
+- Oversized bodies are stored as text ending in `...(truncated)`. Details and Copy as cURL use captured data, so a truncated cURL command may not replay the complete request.
 
 ## Full Example
 
@@ -752,6 +815,13 @@ Global configuration, initialized once via `AppLogsConfig.init()`.
 | `enabled` | `bool` | `false` | Master switch — gates all writes and UI rendering |
 | `consoleMinLevel` | `AppLogLevel` | `.debug` | Minimum console log level |
 | `maskHeaders` | `bool` | `false` | Mask sensitive headers (Authorization, etc.) |
+| `maxConsoleEntries` | `int` | `500` | Maximum Console entries; 0 retains none |
+| `maxNetworkEntries` | `int` | `200` | Maximum Network entries; 0 retains none |
+| `maxErrorEntries` | `int` | `200` | Maximum Error cards; 0 retains none |
+| `maxNetworkBodyCharacters` | `int` | `100000` | Maximum characters per request / response body; 0 captures none |
+| `errorCaptureRules` | `AppErrorCaptureRules` | capture all | Automatic Error sources, additional patterns, and ignored patterns |
+| `mergeRepeatedErrors` | `bool` | `true` | Merge repeated Error entries |
+| `errorMergeWindow` | `Duration` | `30s` | Duplicate Error merge window |
 | `onCopySuccess` | `void Function(String)?` | `null` | Called after clipboard copy |
 | `theme` | `AppLogsTheme` | `defaultTheme` | Custom color palette |
 
@@ -800,14 +870,16 @@ store.logNetworkError(id: '1', at: DateTime.now(), request: {...}, error: {...})
 List<AppConsoleLogEntry> logs = store.console;
 List<AppErrorLogEntry> errors = store.errors;
 List<AppNetworkLogEntry> reqs = store.network;
+int unreadErrors = store.unreadErrorCount;
 
 // Clear
 store.clearConsole();
+store.markErrorsRead();
 store.clearErrors();
 store.clearNetwork();
 ```
 
-Capacity limits: Console 500 entries, Network 200 entries, Error 200 entries. Oldest entries are automatically evicted (FIFO).
+Default capacities are Console 500, Network 200, and Error 200 entries. Configure them through `AppLogsConfig`.
 
 ### AppLogsDioInterceptor
 
@@ -908,7 +980,7 @@ The button can be freely dragged anywhere on screen. For production builds, set 
 
 ### Q: Is there a log entry limit?
 
-Console: 500 entries max. Network: 200 entries max. Error: 200 entries max. Oldest entries are automatically evicted (FIFO).
+Defaults are Console 500, Network 200, and Error 200 entries. Configure them through `AppLogsConfig`; oldest entries are evicted first.
 
 ### Q: Does it conflict with existing Dio interceptors?
 
