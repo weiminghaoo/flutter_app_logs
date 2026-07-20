@@ -27,7 +27,9 @@ Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，�
 
 - **Console 日志面板** — 查看用户通过 `AppConsoleLogger` 主动记录的生命周期和流程日志，支持级别筛选和关键词搜索
 - **Error 错误面板** — 自动捕获 `FlutterError`、根 isolate 未处理异常，以及 `debugPrint` 输出的 Network Error / App Error 多行错误块；默认显示三行摘要，可展开完整错误与堆栈
-- **Network 日志面板** — 检查 HTTP 请求、响应和错误，显示耗时、Headers、请求体、响应体
+- **Network 日志面板** — 检查 HTTP 请求、响应和错误，显示耗时、Headers、请求体、响应体，并支持 method / status / host / 耗时组合筛选
+- **请求生命周期** — 请求发出后立即显示 Pending，结束后更新为成功、错误或 Cancelled
+- **Copy as cURL** — 从请求详情一键复制可复现的 cURL 命令，不会自动重放请求
 - **可拖拽浮动按钮** — 在屏幕任意位置拖动，不遮挡业务 UI
 - **内置 Dio 拦截器** — `AppLogsDioInterceptor` 一行代码接入，自动记录请求全生命周期
 - **生产环境零开销** — `enabled: false` 时所有写入短路，UI 直接返回 `child`
@@ -39,7 +41,7 @@ Flutter 应用内调试面板 — 通过可拖拽浮动按钮 + 底部面板，�
 
 ```yaml
 dependencies:
-  flutter_app_logs: ^0.1.6
+  flutter_app_logs: ^0.1.8
 ```
 
 ```bash
@@ -95,6 +97,110 @@ dio.interceptors.add(AppLogsDioInterceptor());
 ```
 
 完成！点击屏幕上的浮动按钮即可打开日志面板。
+
+## Network 面板新功能
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_filters.png" width="300" alt="Network 组合筛选" />
+  &nbsp;
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_curl.png" width="300" alt="Network 详情与 Copy as cURL" />
+</p>
+
+### Method / Status / Host / Duration 组合筛选
+
+点击面板标题栏的搜索图标展开 Network 工具栏，即可同时按以下条件筛选：
+
+- `Method`：根据当前记录动态显示 GET、POST 等方法
+- `Status`：Pending、2xx、3xx、4xx、5xx、无 HTTP 响应的 Error，以及 Cancelled
+- `Host`：根据完整请求 URL 动态生成
+- `Duration`：`<500ms`、`500ms–1s`、`≥1s`
+
+多组选项按“并且”关系组合；搜索框仍可同时匹配 URL、path、host、method 和 status。筛选完全基于已经捕获的本地日志，不会再次发送请求。
+
+### Pending 与 Cancelled
+
+使用 `AppLogsDioInterceptor` 时，请求经过 `onRequest` 后会立即写入 Pending；收到 response 或 error 后，同一条记录会更新为完成状态。通过 Dio `CancelToken` 取消的请求显示为 Cancelled：
+
+```dart
+final dio = Dio();
+
+// 建议放在业务拦截器之前，确保 onRequest 能尽早写入 Pending，
+// 并捕获业务拦截器继续传递的 response / error。
+dio.interceptors.add(AppLogsDioInterceptor());
+```
+
+如果业务拦截器直接返回自定义响应或吞掉错误，没有继续调用对应 handler，后续拦截器无法观察到该事件；因此建议把日志拦截器放在拦截器链最前面。
+
+### Copy as cURL
+
+打开 Network 详情后，点击标题右侧的终端图标即可复制 cURL；旁边的普通复制图标只复制完整 URL。生成的命令包含 method、完整 URL、已捕获的 Headers，以及 JSON / 字符串 body 或 FormData 字段。
+
+建议在初始化时开启敏感 Header 脱敏，避免复制内容带出真实凭证：
+
+```dart
+AppLogsConfig.init(
+  enabled: kDebugMode,
+  maskHeaders: true,
+  onCopySuccess: (text) => showToast('已复制'),
+);
+```
+
+注意：
+
+- cURL 只会复制到剪贴板，不会自动发送或重放请求。
+- `maskHeaders: true` 会先遮盖 Authorization、Token、Cookie、Device ID、App Check 等 Header；cURL 使用遮盖后的值，需要调试真实接口时请自行替换。
+- Dio `FormData` 的普通字段会输出为 `--form`；文件内容不会被插件读取，文件字段会生成 `@<filename>` 占位符，执行前需替换为本机文件路径。
+- `onCopySuccess` 为可选回调。插件不依赖 Toast 组件；如果宿主需要复制成功提示，可在这里接入自己的 Toast、SnackBar 或 Overlay。
+
+## Error 面板接入
+
+### 自动捕获
+
+只要同时完成 `AppLogsConfig.init(enabled: true)` 和根节点的 `AppLogPanelHost` 包裹，Error 面板就会在 `AppLogPanelHost` 挂载期间自动接入：
+
+- `FlutterError.onError` 上报的 Flutter framework 错误
+- `PlatformDispatcher.onError` 上报的根 isolate 未处理异常
+- `debugPrint` 输出且以 `🚨 [Network Error]`、`🚨 [App Error...]`、`Unhandled Exception:` 或 `[ERROR:flutter/...] Unhandled Exception:` 开头的多行错误块
+
+插件会继续调用接入前已有的错误处理器，不会吞掉原有控制台输出。连续 `debugPrint` 的错误行会自动合并为一条记录，因此下面这种现有日志无需改造：
+
+```dart
+debugPrint('🚨 [Network Error] POST https://api.example.com/orders');
+debugPrint('   Status: 500');
+debugPrint('   Message: Server error');
+debugPrint('   Response: {"code": 500}');
+```
+
+`AppConsoleLogger.error(...)` 仍会进入 **Console** 面板。它适合用户主动记录生命周期、业务流程和可预期状态；运行时异常和控制台错误块则进入独立的 **Error** 面板。
+
+### 手动注入错误
+
+对于已经在业务代码中捕获、不会到达 Flutter 全局错误出口的异常，可以直接写入 Error 面板：
+
+```dart
+try {
+  await submitOrder();
+} catch (error, stackTrace) {
+  AppLogStore.instance.logError(
+    source: AppErrorLogSource.console,
+    message: error.toString(),
+    stackTrace: stackTrace,
+  );
+}
+```
+
+`source` 用于标记来源：`.flutter` 表示 framework 错误，`.unhandled` 表示未处理异常，`.console` 表示控制台或业务侧接入的错误。
+
+### 读取与清空数据
+
+```dart
+final List<AppErrorLogEntry> errors = AppLogStore.instance.errors;
+
+// 仅清空 Error，不影响 Network 和 Console。
+AppLogStore.instance.clearErrors();
+```
+
+Error 最多保留 200 条，最新记录排在最前。每张错误卡默认显示三行摘要，可展开查看完整错误和堆栈，也可通过卡片标题栏的复制按钮复制完整内容。
 
 ## 完整示例
 
@@ -693,20 +799,23 @@ final store = AppLogStore.instance;
 
 // 写入
 store.logConsole(level: AppLogLevel.info, message: '...', tag: 'tag');
+store.logError(source: AppErrorLogSource.console, message: '...', stackTrace: stackTrace);
 store.logNetworkRequest(id: '1', at: DateTime.now(), path: '/api', method: 'GET', request: {...});
 store.logNetworkResponse(id: '1', at: DateTime.now(), request: {...}, response: {...}, durationMs: 120);
 store.logNetworkError(id: '1', at: DateTime.now(), request: {...}, error: {...});
 
 // 读取（只读）
 List<AppConsoleLogEntry> logs = store.console;
+List<AppErrorLogEntry> errors = store.errors;
 List<AppNetworkLogEntry> reqs = store.network;
 
 // 清空
 store.clearConsole();
+store.clearErrors();
 store.clearNetwork();
 ```
 
-容量限制：Console 500 条、Network 200 条，超出自动淘汰最旧记录。
+容量限制：Console 500 条、Network 200 条、Error 200 条，超出自动淘汰最旧记录。
 
 ### AppLogsDioInterceptor
 
@@ -720,9 +829,16 @@ dio.interceptors.add(AppLogsDioInterceptor());
 
 建议放在拦截器链的**最前面**（在业务拦截器之前），以捕获完整的请求信息。
 
+请求发出后记录状态为 `AppNetworkLogState.pending`；完成时更新为 `success`、`error` 或 `cancelled`。`AppNetworkLogEntry.toCurl()` 可生成与详情页终端按钮相同的 cURL 文本：
+
+```dart
+final entry = AppLogStore.instance.network.first;
+final curl = entry.toCurl();
+```
+
 ### AppLogPanelHost
 
-包裹应用根节点的 Widget。显示可拖拽浮动按钮，点击打开 Console / Network 双标签面板。
+包裹应用根节点的 Widget。显示可拖拽浮动按钮，点击打开 Network / Console / Error 三标签面板，并在挂载期间启用自动错误捕获。
 
 ```dart
 AppLogPanelHost(child: yourApp)
@@ -801,7 +917,7 @@ AppLogsConfig.init(
 
 ### Q: 日志有数量上限吗？
 
-Console 上限 500 条，Network 上限 200 条。超出后自动淘汰最旧的记录（FIFO）。
+Console 上限 500 条，Network 上限 200 条，Error 上限 200 条。超出后自动淘汰最旧的记录（FIFO）。
 
 ### Q: 与现有的 Dio 拦截器冲突吗？
 

@@ -88,6 +88,7 @@ void main() {
       expect(store.network.first.path, '/api/test');
       expect(store.network.first.method, 'GET');
       expect(store.network.first.response, isNull);
+      expect(store.network.first.state, AppNetworkLogState.pending);
       expect(handler.nextCalled, isTrue);
     });
 
@@ -150,6 +151,7 @@ void main() {
       expect(store.network.first.response, isNotNull);
       expect(store.network.first.response!['statusCode'], 200);
       expect(store.network.first.durationMs, isNotNull);
+      expect(store.network.first.state, AppNetworkLogState.success);
       expect(responseHandler.nextCalled, isTrue);
     });
 
@@ -263,6 +265,7 @@ void main() {
       expect(entry.error, isNotNull);
       expect(entry.error!['type'], 'connectionTimeout');
       expect(entry.error!['message'], 'Connection timed out');
+      expect(entry.state, AppNetworkLogState.error);
       expect(handler.nextCalled, isTrue);
     });
 
@@ -287,6 +290,24 @@ void main() {
       expect(entry.error!['statusCode'], 500);
       expect(entry.response, isNotNull);
       expect(entry.response!['statusCode'], 500);
+      expect(entry.statusCode, 500);
+      expect(entry.state, AppNetworkLogState.error);
+    });
+
+    test('取消请求记录为 cancelled 而不是普通 error', () {
+      final options = makeOptions(path: '/api/cancelled');
+      interceptor.onRequest(options, _TestRequestHandler());
+
+      final err = DioException(
+        requestOptions: options,
+        type: DioExceptionType.cancel,
+        message: 'Cancelled by user',
+      );
+      interceptor.onError(err, _TestErrorHandler());
+
+      final entry = store.network.first;
+      expect(entry.error!['type'], 'cancel');
+      expect(entry.state, AppNetworkLogState.cancelled);
     });
 
     test('enabled=false 时不记录但仍调用 next', () {

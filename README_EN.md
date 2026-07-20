@@ -24,7 +24,9 @@ An in-app debug panel for Flutter — inspect **Network requests**, opt-in **Con
 
 - **Console Log Panel** — view lifecycle and flow logs explicitly recorded with `AppConsoleLogger`, with level filtering and keyword search
 - **Error Panel** — automatically captures `FlutterError`, unhandled root-isolate exceptions, and multiline Network Error / App Error blocks emitted through `debugPrint`; shows a three-line summary by default and expands to the full error and stack trace
-- **Network Log Panel** — inspect HTTP requests, responses, and errors with timing, headers, and body
+- **Network Log Panel** — inspect HTTP requests, responses, and errors with timing, headers, and body, plus combined method / status / host / duration filters
+- **Request lifecycle** — requests appear as Pending immediately, then update to success, error, or Cancelled
+- **Copy as cURL** — copy a reproducible cURL command from request details without replaying it automatically
 - **Draggable FAB** — freely drag the floating button anywhere on screen
 - **Built-in Dio Interceptor** — `AppLogsDioInterceptor`, one line to integrate
 - **Zero overhead in production** — when `enabled: false`, all writes short-circuit and UI returns `child` directly
@@ -36,7 +38,7 @@ An in-app debug panel for Flutter — inspect **Network requests**, opt-in **Con
 
 ```yaml
 dependencies:
-  flutter_app_logs: ^0.1.6
+  flutter_app_logs: ^0.1.8
 ```
 
 ```bash
@@ -91,6 +93,110 @@ dio.interceptors.add(AppLogsDioInterceptor());
 ```
 
 Done! Tap the floating button on screen to open the debug panel.
+
+## Network Panel Features
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_filters.png" width="300" alt="Combined Network filters" />
+  &nbsp;
+  <img src="https://raw.githubusercontent.com/wildcatDownstairs/flutter_app_logs/main/doc/screenshot_network_curl.png" width="300" alt="Network details and Copy as cURL" />
+</p>
+
+### Combined Method / Status / Host / Duration filters
+
+Tap the search icon in the panel header to expand the Network toolbar. Filters can be combined across:
+
+- `Method`: dynamically populated from the captured GET, POST, and other methods
+- `Status`: Pending, 2xx, 3xx, 4xx, 5xx, transport Error without an HTTP response, and Cancelled
+- `Host`: dynamically populated from complete request URLs
+- `Duration`: `<500ms`, `500ms–1s`, and `≥1s`
+
+Filter groups use AND semantics. The search field can still match URL, path, host, method, and status at the same time. Filtering only reads locally captured logs and never sends another request.
+
+### Pending and Cancelled
+
+With `AppLogsDioInterceptor`, `onRequest` immediately creates a Pending entry. The same entry is updated when a response or error arrives. Requests cancelled through Dio's `CancelToken` appear as Cancelled:
+
+```dart
+final dio = Dio();
+
+// Put it before business interceptors so Pending is recorded early and
+// forwarded responses / errors can complete the same entry.
+dio.interceptors.add(AppLogsDioInterceptor());
+```
+
+If a business interceptor returns its own response or consumes an error without forwarding the corresponding handler, later interceptors cannot observe that event. Place the log interceptor first in the chain for the most complete lifecycle.
+
+### Copy as cURL
+
+Open Network details and tap the terminal icon on the right to copy cURL. The adjacent regular copy icon copies only the complete URL. The generated command includes the method, complete URL, captured headers, and a JSON / string body or FormData fields.
+
+Enable sensitive-header masking during initialization so copied commands do not expose live credentials:
+
+```dart
+AppLogsConfig.init(
+  enabled: kDebugMode,
+  maskHeaders: true,
+  onCopySuccess: (text) => showToast('Copied!'),
+);
+```
+
+Notes:
+
+- Copy as cURL only writes to the clipboard; it never sends or replays the request.
+- With `maskHeaders: true`, Authorization, Token, Cookie, Device ID, and App Check values are masked before cURL generation. Replace them yourself if the command must call a real endpoint.
+- Regular Dio `FormData` fields become `--form` arguments. File bytes are not read; file fields use an `@<filename>` placeholder that must be replaced with a local file path before execution.
+- `onCopySuccess` is optional. The package has no Toast dependency; connect your own Toast, SnackBar, or Overlay if the host app needs copy feedback.
+
+## Error Panel Integration
+
+### Automatic capture
+
+After both `AppLogsConfig.init(enabled: true)` and the root-level `AppLogPanelHost` wrapper are in place, the Error panel automatically captures these sources while `AppLogPanelHost` is mounted:
+
+- Flutter framework errors reported through `FlutterError.onError`
+- Unhandled root-isolate exceptions reported through `PlatformDispatcher.onError`
+- Multiline `debugPrint` error blocks beginning with `🚨 [Network Error]`, `🚨 [App Error...]`, `Unhandled Exception:`, or `[ERROR:flutter/...] Unhandled Exception:`
+
+The package forwards each error to the previously installed handler and preserves the original console output. Consecutive `debugPrint` lines are grouped into one entry, so existing output like this needs no migration:
+
+```dart
+debugPrint('🚨 [Network Error] POST https://api.example.com/orders');
+debugPrint('   Status: 500');
+debugPrint('   Message: Server error');
+debugPrint('   Response: {"code": 500}');
+```
+
+`AppConsoleLogger.error(...)` still writes to the **Console** panel. Use it for explicit lifecycle, business-flow, and expected-state logs; runtime exceptions and captured console error blocks belong to the separate **Error** panel.
+
+### Manual error injection
+
+If business code catches an exception before it reaches Flutter's global error handlers, write it directly to the Error panel:
+
+```dart
+try {
+  await submitOrder();
+} catch (error, stackTrace) {
+  AppLogStore.instance.logError(
+    source: AppErrorLogSource.console,
+    message: error.toString(),
+    stackTrace: stackTrace,
+  );
+}
+```
+
+Use `.flutter` for framework errors, `.unhandled` for unhandled exceptions, and `.console` for console- or application-provided errors.
+
+### Read and clear data
+
+```dart
+final List<AppErrorLogEntry> errors = AppLogStore.instance.errors;
+
+// Clears only Error entries; Network and Console remain unchanged.
+AppLogStore.instance.clearErrors();
+```
+
+The store keeps up to 200 Error entries, newest first. Each card shows a three-line summary by default, expands to the full error and stack trace, and provides a header copy button for the complete content.
 
 ## Full Example
 
@@ -685,20 +791,23 @@ final store = AppLogStore.instance;
 
 // Write
 store.logConsole(level: AppLogLevel.info, message: '...', tag: 'tag');
+store.logError(source: AppErrorLogSource.console, message: '...', stackTrace: stackTrace);
 store.logNetworkRequest(id: '1', at: DateTime.now(), path: '/api', method: 'GET', request: {...});
 store.logNetworkResponse(id: '1', at: DateTime.now(), request: {...}, response: {...}, durationMs: 120);
 store.logNetworkError(id: '1', at: DateTime.now(), request: {...}, error: {...});
 
 // Read (read-only)
 List<AppConsoleLogEntry> logs = store.console;
+List<AppErrorLogEntry> errors = store.errors;
 List<AppNetworkLogEntry> reqs = store.network;
 
 // Clear
 store.clearConsole();
+store.clearErrors();
 store.clearNetwork();
 ```
 
-Capacity limits: Console 500 entries, Network 200 entries. Oldest entries are automatically evicted (FIFO).
+Capacity limits: Console 500 entries, Network 200 entries, Error 200 entries. Oldest entries are automatically evicted (FIFO).
 
 ### AppLogsDioInterceptor
 
@@ -712,9 +821,16 @@ Automatically records the full request → response / error lifecycle including 
 
 Recommended to place **first** in the interceptor chain (before business interceptors) to capture complete request information.
 
+Requests start as `AppNetworkLogState.pending`, then update to `success`, `error`, or `cancelled`. `AppNetworkLogEntry.toCurl()` generates the same cURL text as the terminal button in Network details:
+
+```dart
+final entry = AppLogStore.instance.network.first;
+final curl = entry.toCurl();
+```
+
 ### AppLogPanelHost
 
-Widget that wraps your app root. Shows a draggable floating button; tapping opens a bottom sheet with Console and Network tabs.
+Widget that wraps your app root. Shows a draggable floating button; tapping opens a bottom sheet with Network, Console, and Error tabs. Automatic error capture remains active while the host is mounted.
 
 ```dart
 AppLogPanelHost(child: yourApp)
@@ -792,7 +908,7 @@ The button can be freely dragged anywhere on screen. For production builds, set 
 
 ### Q: Is there a log entry limit?
 
-Console: 500 entries max. Network: 200 entries max. Oldest entries are automatically evicted (FIFO).
+Console: 500 entries max. Network: 200 entries max. Error: 200 entries max. Oldest entries are automatically evicted (FIFO).
 
 ### Q: Does it conflict with existing Dio interceptors?
 

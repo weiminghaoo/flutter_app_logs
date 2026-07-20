@@ -60,6 +60,194 @@ void main() {
     expect(find.text('Search network requests...'), findsNothing);
   });
 
+  testWidgets('Network 支持 method、status、host 与耗时组合筛选', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final store = AppLogStore.instance;
+    store.logNetworkRequest(
+      id: 'pending',
+      at: DateTime.now(),
+      path: '/pending',
+      method: 'POST',
+      request: const <String, Object?>{'url': 'https://api.alpha.test/pending'},
+    );
+    store.logNetworkRequest(
+      id: 'success-fast',
+      at: DateTime.now(),
+      path: '/success-fast',
+      method: 'GET',
+      request: const <String, Object?>{
+        'url': 'https://api.beta.test/success-fast',
+      },
+    );
+    store.logNetworkResponse(
+      id: 'success-fast',
+      at: DateTime.now(),
+      response: const <String, Object?>{'statusCode': 200},
+      durationMs: 120,
+    );
+    store.logNetworkRequest(
+      id: 'failed-slow',
+      at: DateTime.now(),
+      path: '/failed-slow',
+      method: 'POST',
+      request: const <String, Object?>{
+        'url': 'https://api.alpha.test/failed-slow',
+      },
+    );
+    store.logNetworkError(
+      id: 'failed-slow',
+      at: DateTime.now(),
+      error: const <String, Object?>{'type': 'badResponse', 'statusCode': 500},
+      response: const <String, Object?>{'statusCode': 500},
+      durationMs: 1500,
+    );
+    store.logNetworkRequest(
+      id: 'cancelled',
+      at: DateTime.now(),
+      path: '/cancelled',
+      method: 'DELETE',
+      request: const <String, Object?>{
+        'url': 'https://api.alpha.test/cancelled',
+      },
+    );
+    store.logNetworkError(
+      id: 'cancelled',
+      at: DateTime.now(),
+      error: const <String, Object?>{'type': 'cancel'},
+      durationMs: 400,
+      state: AppNetworkLogState.cancelled,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+    await openPanel(tester);
+
+    expect(
+      find.byKey(const Key('app_logs_network_status_pending')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('app_logs_network_status_cancelled')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('app_logs_toggle_toolbar_button')));
+    await tester.pumpAndSettle();
+
+    final methodPost = find.byKey(
+      const Key('app_logs_network_filter_method_POST'),
+    );
+    await tester.ensureVisible(methodPost);
+    await tester.tap(methodPost);
+    await tester.pump();
+    expect(find.text('/pending'), findsOneWidget);
+    expect(find.text('/failed-slow'), findsOneWidget);
+    expect(find.text('/success-fast'), findsNothing);
+    expect(find.text('/cancelled'), findsNothing);
+
+    await tester.tap(methodPost);
+    await tester.pump();
+    final status5xx = find.byKey(
+      const Key('app_logs_network_filter_status_http5xx'),
+    );
+    await tester.ensureVisible(status5xx);
+    await tester.tap(status5xx);
+    await tester.pump();
+    expect(find.text('/failed-slow'), findsOneWidget);
+    expect(find.text('/pending'), findsNothing);
+
+    await tester.tap(status5xx);
+    await tester.pump();
+    final betaHost = find.byKey(
+      const Key('app_logs_network_filter_host_api.beta.test'),
+    );
+    await tester.ensureVisible(betaHost);
+    await tester.tap(betaHost);
+    await tester.pump();
+    expect(find.text('/success-fast'), findsOneWidget);
+    expect(find.text('/failed-slow'), findsNothing);
+
+    await tester.tap(betaHost);
+    await tester.pump();
+    final slowDuration = find.byKey(
+      const Key('app_logs_network_filter_duration_slow'),
+    );
+    await tester.ensureVisible(slowDuration);
+    await tester.tap(slowDuration);
+    await tester.pump();
+    expect(find.text('/failed-slow'), findsOneWidget);
+    expect(find.text('/success-fast'), findsNothing);
+  });
+
+  testWidgets('Network 详情可以复制脱敏后的 cURL', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    AppLogStore.instance.logNetworkRequest(
+      id: 'curl-copy',
+      at: DateTime.now(),
+      path: '/orders',
+      method: 'POST',
+      request: const <String, Object?>{
+        'url': 'https://api.example.com/orders',
+        'headers': <String, Object?>{
+          'Content-Type': 'application/json',
+          'Authorization': '***fghijk',
+        },
+        'data': <String, Object?>{'product_id': 123},
+      },
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+    await openPanel(tester);
+    await tester.tap(find.text('/orders').first);
+    await tester.pumpAndSettle();
+
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (_) async => null,
+    );
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    String? copiedText;
+    AppLogsConfig.onCopySuccess = (text) => copiedText = text;
+
+    await tester.tap(
+      find.byKey(const Key('app_logs_network_copy_curl_button')),
+    );
+    await tester.pump();
+
+    expect(copiedText, startsWith('curl'));
+    expect(copiedText, contains("--request 'POST'"));
+    expect(copiedText, contains("--url 'https://api.example.com/orders'"));
+    expect(copiedText, contains('Authorization: ***fghijk'));
+    expect(copiedText, contains('"product_id":123'));
+    expect(find.text('Copied'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 1500));
+  });
+
   testWidgets('Error 面板归并 debugPrint 的 Network Error 错误块', (tester) async {
     tester.view
       ..physicalSize = const Size(390, 844)
@@ -209,10 +397,7 @@ void main() {
     final preview = tester.widget<Text>(previewFinder);
     expect(preview.maxLines, 3);
     expect(preview.overflow, TextOverflow.ellipsis);
-    expect(
-      find.byKey(const Key('app_logs_error_message_full')),
-      findsNothing,
-    );
+    expect(find.byKey(const Key('app_logs_error_message_full')), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const Key('app_logs_error_copy_button')),

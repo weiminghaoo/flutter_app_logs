@@ -62,6 +62,9 @@ class AppErrorLogEntry {
   });
 }
 
+/// Network 请求当前所处的生命周期状态。
+enum AppNetworkLogState { pending, success, error, cancelled }
+
 /// Network 请求的单条记录。
 ///
 /// 一个请求的生命周期分三个阶段：
@@ -73,6 +76,7 @@ class AppNetworkLogEntry {
   final DateTime at;
   final String path;
   final String method;
+  final AppNetworkLogState state;
   final Map<String, Object?> request;
   final Map<String, Object?>? response;
   final Map<String, Object?>? error;
@@ -83,16 +87,71 @@ class AppNetworkLogEntry {
     required this.at,
     required this.path,
     required this.method,
+    AppNetworkLogState? state,
     required this.request,
     this.response,
     this.error,
     this.durationMs,
-  });
+  }) : state =
+           state ??
+           (error != null
+               ? AppNetworkLogState.error
+               : response != null
+               ? AppNetworkLogState.success
+               : AppNetworkLogState.pending);
+
+  /// 捕获到的完整 URL；手动接入未提供 `url` 时回退为 [path]。
+  String get url => request['url']?.toString() ?? path;
+
+  /// 请求 URL 中的 host；相对路径或非法 URL 返回空字符串。
+  String get host => Uri.tryParse(url)?.host ?? '';
+
+  /// HTTP 状态码。Pending、取消和无响应的传输错误通常为 `null`。
+  int? get statusCode {
+    final raw = response?['statusCode'] ?? error?['statusCode'];
+    return switch (raw) {
+      int value => value,
+      num value => value.toInt(),
+      String value => int.tryParse(value),
+      _ => null,
+    };
+  }
+
+  /// 将当前捕获到的请求转换为可复制的 cURL 文本，不会发送请求。
+  ///
+  /// Dio 拦截器捕获的 Header 使用已经经过 [AppLogsConfig.maskHeaders] 处理的值。
+  String toCurl() {
+    final arguments = <String>[
+      'curl',
+      '--request ${_shellQuote(method.toUpperCase())}',
+      '--url ${_shellQuote(url)}',
+    ];
+
+    final headers = request['headers'];
+    if (headers is Map) {
+      for (final entry in headers.entries) {
+        arguments.add(
+          '--header ${_shellQuote('${entry.key}: ${entry.value}')}',
+        );
+      }
+    }
+
+    final data = request['data'];
+    if (data is Map && data['type'] == 'FormData') {
+      _appendFormDataCurlArguments(arguments, data);
+    } else if (data != null) {
+      final encoded = data is String ? data : _encodeCurlData(data);
+      arguments.add('--data-raw ${_shellQuote(encoded)}');
+    }
+
+    return arguments.join(' \\\n  ');
+  }
 
   AppNetworkLogEntry copyWith({
     DateTime? at,
     String? path,
     String? method,
+    AppNetworkLogState? state,
     Map<String, Object?>? request,
     Map<String, Object?>? response,
     Map<String, Object?>? error,
@@ -103,11 +162,54 @@ class AppNetworkLogEntry {
       at: at ?? this.at,
       path: path ?? this.path,
       method: method ?? this.method,
+      state:
+          state ??
+          (error != null
+              ? AppNetworkLogState.error
+              : response != null
+              ? AppNetworkLogState.success
+              : this.state),
       request: request ?? this.request,
       response: response ?? this.response,
       error: error ?? this.error,
       durationMs: durationMs ?? this.durationMs,
     );
+  }
+}
+
+String _shellQuote(String value) => "'${value.replaceAll("'", "'\"'\"'")}'";
+
+String _encodeCurlData(Object data) {
+  try {
+    return jsonEncode(data);
+  } catch (_) {
+    return data.toString();
+  }
+}
+
+void _appendFormDataCurlArguments(
+  List<String> arguments,
+  Map<Object?, Object?> data,
+) {
+  final fields = data['fields'];
+  if (fields is Iterable) {
+    for (final rawField in fields) {
+      if (rawField is! Map) continue;
+      final key = rawField['key']?.toString();
+      if (key == null || key.isEmpty) continue;
+      arguments.add('--form ${_shellQuote('$key=${rawField['value'] ?? ''}')}');
+    }
+  }
+
+  final files = data['files'];
+  if (files is Iterable) {
+    for (final rawFile in files) {
+      if (rawFile is! Map) continue;
+      final key = rawFile['key']?.toString();
+      if (key == null || key.isEmpty) continue;
+      final filename = rawFile['filename']?.toString() ?? 'file';
+      arguments.add('--form ${_shellQuote('$key=@<$filename>')}');
+    }
   }
 }
 
@@ -241,21 +343,21 @@ class AppLogStore extends ChangeNotifier {
   }) {
     if (!AppLogsConfig.enabled) return;
     final existing = _networkById[id];
-    final next =
-        (existing ??
-                AppNetworkLogEntry(
-                  id: id,
-                  at: at,
-                  path: request?['path']?.toString() ?? '',
-                  method: request?['method']?.toString() ?? '',
-                  request: request ?? const <String, Object?>{},
-                ))
-            .copyWith(
+    final next = (existing ??
+            AppNetworkLogEntry(
+              id: id,
               at: at,
-              request: request ?? existing?.request,
-              response: response,
-              durationMs: durationMs,
-            );
+              path: request?['path']?.toString() ?? '',
+              method: request?['method']?.toString() ?? '',
+              request: request ?? const <String, Object?>{},
+            ))
+        .copyWith(
+          at: at,
+          state: AppNetworkLogState.success,
+          request: request ?? existing?.request,
+          response: response,
+          durationMs: durationMs,
+        );
     _upsertNetwork(id, next);
   }
 
@@ -266,25 +368,26 @@ class AppLogStore extends ChangeNotifier {
     required Map<String, Object?> error,
     Map<String, Object?>? response,
     int? durationMs,
+    AppNetworkLogState state = AppNetworkLogState.error,
   }) {
     if (!AppLogsConfig.enabled) return;
     final existing = _networkById[id];
-    final next =
-        (existing ??
-                AppNetworkLogEntry(
-                  id: id,
-                  at: at,
-                  path: request?['path']?.toString() ?? '',
-                  method: request?['method']?.toString() ?? '',
-                  request: request ?? const <String, Object?>{},
-                ))
-            .copyWith(
+    final next = (existing ??
+            AppNetworkLogEntry(
+              id: id,
               at: at,
-              request: request ?? existing?.request,
-              response: response ?? existing?.response,
-              error: error,
-              durationMs: durationMs,
-            );
+              path: request?['path']?.toString() ?? '',
+              method: request?['method']?.toString() ?? '',
+              request: request ?? const <String, Object?>{},
+            ))
+        .copyWith(
+          at: at,
+          state: state,
+          request: request ?? existing?.request,
+          response: response ?? existing?.response,
+          error: error,
+          durationMs: durationMs,
+        );
     _upsertNetwork(id, next);
   }
 

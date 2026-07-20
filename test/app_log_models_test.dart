@@ -45,6 +45,10 @@ void main() {
       expect(entry.path, '/api/test');
       expect(entry.method, 'GET');
       expect(entry.request, {'url': 'https://example.com/api/test'});
+      expect(entry.state, AppNetworkLogState.pending);
+      expect(entry.url, 'https://example.com/api/test');
+      expect(entry.host, 'example.com');
+      expect(entry.statusCode, isNull);
       expect(entry.response, isNull);
       expect(entry.error, isNull);
       expect(entry.durationMs, isNull);
@@ -75,6 +79,8 @@ void main() {
       expect(updated.response, {'statusCode': 200, 'data': 'ok'});
       expect(updated.durationMs, 150);
       expect(updated.error, isNull);
+      expect(updated.state, AppNetworkLogState.success);
+      expect(updated.statusCode, 200);
     });
 
     test('copyWith 更新 error', () {
@@ -94,6 +100,7 @@ void main() {
       expect(updated.error, isNotNull);
       expect(updated.error!['type'], 'timeout');
       expect(updated.durationMs, 5000);
+      expect(updated.state, AppNetworkLogState.error);
     });
 
     test('copyWith preserves original when no args given', () {
@@ -118,6 +125,73 @@ void main() {
       expect(copy.response, entry.response);
       expect(copy.error, entry.error);
       expect(copy.durationMs, entry.durationMs);
+    });
+
+    test('cancelled 状态可独立于 error payload 保存', () {
+      final entry = AppNetworkLogEntry(
+        id: 'req-cancelled',
+        at: DateTime.now(),
+        path: '/cancelled',
+        method: 'GET',
+        state: AppNetworkLogState.cancelled,
+        request: const {'url': 'https://api.example.com/cancelled'},
+        error: const {'type': 'cancel'},
+      );
+
+      expect(entry.state, AppNetworkLogState.cancelled);
+      expect(entry.statusCode, isNull);
+    });
+
+    test('toCurl 输出完整 URL、脱敏 Header 和 JSON body', () {
+      final entry = AppNetworkLogEntry(
+        id: 'curl-json',
+        at: DateTime.now(),
+        path: '/orders',
+        method: 'POST',
+        request: const <String, Object?>{
+          'url': 'https://api.example.com/orders?page=1',
+          'headers': <String, Object?>{
+            'Content-Type': 'application/json',
+            'Authorization': '***fghijk',
+          },
+          'data': <String, Object?>{'name': "O'Reilly", 'count': 2},
+        },
+      );
+
+      final curl = entry.toCurl();
+
+      expect(curl, startsWith('curl \\\n'));
+      expect(curl, contains("--request 'POST'"));
+      expect(curl, contains("--url 'https://api.example.com/orders?page=1'"));
+      expect(curl, contains("--header 'Authorization: ***fghijk'"));
+      expect(curl, isNot(contains('Bearer')));
+      expect(curl, contains("O'\"'\"'Reilly"));
+    });
+
+    test('toCurl 为 FormData 文件生成明确占位路径', () {
+      final entry = AppNetworkLogEntry(
+        id: 'curl-form',
+        at: DateTime.now(),
+        path: '/upload',
+        method: 'POST',
+        request: const <String, Object?>{
+          'url': 'https://api.example.com/upload',
+          'data': <String, Object?>{
+            'type': 'FormData',
+            'fields': <Object?>[
+              <String, Object?>{'key': 'title', 'value': 'avatar'},
+            ],
+            'files': <Object?>[
+              <String, Object?>{'key': 'file', 'filename': 'avatar.png'},
+            ],
+          },
+        },
+      );
+
+      final curl = entry.toCurl();
+
+      expect(curl, contains("--form 'title=avatar'"));
+      expect(curl, contains("--form 'file=@<avatar.png>'"));
     });
   });
 

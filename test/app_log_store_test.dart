@@ -168,6 +168,7 @@ void main() {
       expect(store.network.first.path, '/api/test');
       expect(store.network.first.method, 'GET');
       expect(store.network.first.response, isNull);
+      expect(store.network.first.state, AppNetworkLogState.pending);
     });
 
     test('logNetworkResponse 更新已有记录', () {
@@ -188,6 +189,7 @@ void main() {
       expect(store.network.first.response, isNotNull);
       expect(store.network.first.response!['statusCode'], 200);
       expect(store.network.first.durationMs, 100);
+      expect(store.network.first.state, AppNetworkLogState.success);
     });
 
     test('logNetworkError 更新已有记录', () {
@@ -207,6 +209,7 @@ void main() {
       expect(store.network.length, 1);
       expect(store.network.first.error, isNotNull);
       expect(store.network.first.error!['type'], 'timeout');
+      expect(store.network.first.state, AppNetworkLogState.error);
     });
 
     test('logNetworkResponse 对不存在的 id 创建新记录', () {
@@ -228,9 +231,11 @@ void main() {
         at: DateTime.now(),
         request: {'path': '/oops', 'method': 'PATCH'},
         error: {'type': 'cancel'},
+        state: AppNetworkLogState.cancelled,
       );
       expect(store.network.length, 1);
       expect(store.network.first.error!['type'], 'cancel');
+      expect(store.network.first.state, AppNetworkLogState.cancelled);
     });
 
     test('最新网络日志在列表前端（倒序）', () {

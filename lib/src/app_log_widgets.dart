@@ -15,6 +15,7 @@ class _FilterChip extends StatelessWidget {
   final Color? color;
 
   const _FilterChip({
+    super.key,
     required this.label,
     required this.selected,
     required this.onSelected,

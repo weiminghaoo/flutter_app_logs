@@ -40,6 +40,7 @@ export 'src/app_logs.dart'
         AppConsoleLogEntry,
         AppErrorLogEntry,
         AppErrorLogSource,
+        AppNetworkLogState,
         AppNetworkLogEntry;
 
 // ── Dio 拦截器 ─────────────────────────────────────────────────────────────

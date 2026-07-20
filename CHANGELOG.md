@@ -1,4 +1,12 @@
-## Unreleased
+## 0.1.8
+
+- **feat**: Added combined Network filters for method, HTTP status, host, and duration.
+- **feat**: Added explicit pending and cancelled request states across the Dio interceptor, store, list, detail header, and filters.
+- **feat**: Added Copy as cURL from Network details, including captured headers, JSON bodies, form fields, and safe placeholders for FormData files.
+- **docs**: Added Network filter and cURL screenshots, integration guidance, sensitive-header notes, and updated installation snippets to `^0.1.8`.
+- **test**: Added model, lifecycle, Dio interceptor, clipboard, filtering, and narrow-viewport widget coverage.
+
+## 0.1.7
 
 - **feat**: Added a dedicated Error panel that automatically captures Flutter framework errors, unhandled root-isolate exceptions, and multiline Network Error / App Error blocks emitted through `debugPrint`.
 - **feat**: Added a copy action to each Error card header while retaining long-press copy support.
@@ -6,6 +14,7 @@
 - **fix**: Removed the Error copy button tooltip dependency on an ancestor `Overlay`, preventing `No Overlay widget found` from recursively rendering inside the Error panel.
 - **refactor**: Kept `AppConsoleLogger` as an explicit lifecycle and flow logging API; captured errors now use independent storage, search, and clearing behavior.
 - **test**: Added store, capture forwarding, multiline grouping, search-toolbar, and Error tab widget coverage.
+- **docs**: Documented automatic Error capture, manual error injection, data access, and updated installation snippets to `^0.1.7`.
 
 ## 0.1.6
 

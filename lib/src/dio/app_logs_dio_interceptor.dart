@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 
 import '../app_logs_config.dart';
-import '../app_logs.dart' show AppLogStore;
+import '../app_logs.dart' show AppLogStore, AppNetworkLogState;
 
 /// Dio 拦截器，自动将请求/响应/错误记录到 [AppLogStore]。
 ///
@@ -82,10 +82,13 @@ class AppLogsDioInterceptor extends Interceptor {
           'statusCode': err.response?.statusCode,
           if (err.error != null) 'error': err.error.toString(),
         },
-        response: err.response == null
-            ? null
-            : _buildResponseLog(err.response!),
+        response:
+            err.response == null ? null : _buildResponseLog(err.response!),
         durationMs: durationMs,
+        state:
+            err.type == DioExceptionType.cancel
+                ? AppNetworkLogState.cancelled
+                : AppNetworkLogState.error,
       );
     }
     handler.next(err);
@@ -145,12 +148,12 @@ class AppLogsDioInterceptor extends Interceptor {
       }
       final masked =
           lower.contains('authorization') ||
-              lower.contains('token') ||
-              lower.contains('cookie') ||
-              lower.contains('device-id') ||
-              lower.contains('appcheck')
-          ? _maskSecret(value)
-          : value;
+                  lower.contains('token') ||
+                  lower.contains('cookie') ||
+                  lower.contains('device-id') ||
+                  lower.contains('appcheck')
+              ? _maskSecret(value)
+              : value;
       out[key] = masked;
     }
     return out;
@@ -230,19 +233,21 @@ class AppLogsDioInterceptor extends Interceptor {
     if (value is FormData) {
       return <String, Object?>{
         'type': 'FormData',
-        'fields': value.fields
-            .map((e) => <String, Object?>{'key': e.key, 'value': e.value})
-            .toList(),
-        'files': value.files
-            .map(
-              (e) => <String, Object?>{
-                'key': e.key,
-                'filename': e.value.filename,
-                'length': e.value.length,
-                'contentType': e.value.contentType?.toString(),
-              },
-            )
-            .toList(),
+        'fields':
+            value.fields
+                .map((e) => <String, Object?>{'key': e.key, 'value': e.value})
+                .toList(),
+        'files':
+            value.files
+                .map(
+                  (e) => <String, Object?>{
+                    'key': e.key,
+                    'filename': e.value.filename,
+                    'length': e.value.length,
+                    'contentType': e.value.contentType?.toString(),
+                  },
+                )
+                .toList(),
       };
     }
 
