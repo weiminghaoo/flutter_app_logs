@@ -1,3 +1,8 @@
+## 0.2.1
+
+- **fix**: Wrapped structured Console log `ExpansionTile` cards in their own transparent `Material`, preventing Flutter 3.44+ from repeatedly reporting hidden `ListTile` backgrounds and ink splashes.
+- **test**: Added widget regression coverage for Console entries containing `extra` data inside decorated cards.
+
 ## 0.2.0
 
 - **feat**: Added configurable automatic Error capture rules for Flutter, unhandled, and `debugPrint` sources, plus additional and ignored message patterns.

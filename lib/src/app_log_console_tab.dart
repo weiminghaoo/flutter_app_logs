@@ -252,44 +252,47 @@ class _ConsoleTabState extends State<_ConsoleTab> {
                                 ).copyWith(dividerColor: Colors.transparent),
                                 child:
                                     hasExtra
-                                        ? ExpansionTile(
-                                          tilePadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                                vertical: 4,
+                                        ? Material(
+                                          type: MaterialType.transparency,
+                                          child: ExpansionTile(
+                                            tilePadding:
+                                                const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 4,
+                                                ),
+                                            childrenPadding:
+                                                const EdgeInsets.only(
+                                                  left: 12,
+                                                  right: 12,
+                                                  bottom: 12,
+                                                ),
+                                            title: _buildLogHeader(e, time),
+                                            subtitle: Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 6,
                                               ),
-                                          childrenPadding:
-                                              const EdgeInsets.only(
-                                                left: 12,
-                                                right: 12,
-                                                bottom: 12,
+                                              child: Text(
+                                                e.message,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: _LP.textPri,
+                                                  height: 1.4,
+                                                ),
                                               ),
-                                          title: _buildLogHeader(e, time),
-                                          subtitle: Padding(
-                                            padding: const EdgeInsets.only(
-                                              top: 6,
                                             ),
-                                            child: Text(
-                                              e.message,
-                                              style: const TextStyle(
-                                                fontSize: 13,
-                                                color: _LP.textPri,
-                                                height: 1.4,
-                                              ),
+                                            trailing: const Icon(
+                                              Icons.expand_more,
+                                              size: 20,
+                                              color: _LP.textSec,
                                             ),
+                                            children: [
+                                              const Divider(
+                                                height: 16,
+                                                color: _LP.border,
+                                              ),
+                                              _JsonBlock(value: e.extra),
+                                            ],
                                           ),
-                                          trailing: const Icon(
-                                            Icons.expand_more,
-                                            size: 20,
-                                            color: _LP.textSec,
-                                          ),
-                                          children: [
-                                            const Divider(
-                                              height: 16,
-                                              color: _LP.border,
-                                            ),
-                                            _JsonBlock(value: e.extra),
-                                          ],
                                         )
                                         : Padding(
                                           padding: const EdgeInsets.symmetric(

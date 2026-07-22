@@ -396,6 +396,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('带 extra 的 Console 卡片不会触发 ListTile Material 层级断言', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    AppLogsConfig.init(
+      enabled: true,
+      errorCaptureRules: const AppErrorCaptureRules(
+        captureFlutterErrors: false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppLogPanelHost(child: SizedBox.expand())),
+      ),
+    );
+    AppConsoleLogger.debug(
+      'structured console log',
+      tag: 'regression',
+      extra: const <String, Object?>{'ledgerId': 10001},
+    );
+    await tester.pump();
+
+    await openPanel(tester);
+    await tester.tap(find.text('Console'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('structured console log'), findsOneWidget);
+    expect(find.byType(ExpansionTile), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('长 Error 默认三行折叠，展开后显示完整错误与堆栈', (tester) async {
     tester.view
       ..physicalSize = const Size(390, 844)

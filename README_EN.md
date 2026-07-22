@@ -38,7 +38,7 @@ An in-app debug panel for Flutter — inspect **Network requests**, opt-in **Con
 
 ```yaml
 dependencies:
-  flutter_app_logs: ^0.2.0
+  flutter_app_logs: ^0.2.1
 ```
 
 ```bash
