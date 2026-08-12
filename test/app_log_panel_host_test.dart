@@ -807,4 +807,48 @@ void main() {
     expect(expandedTop, greaterThanOrEqualTo(43));
     expect(expandedTop, lessThanOrEqualTo(45));
   });
+
+  testWidgets('键盘 viewInsets 变化时调试面板保持打开（上层 rebuild 不误关）', (tester) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.view.resetViewInsets();
+    });
+
+    // 用 MaterialApp.builder 接入，并在 child 外包一层会随 viewInsets 变化而
+    // rebuild 的 MediaQuery。这模拟了实际项目里的常见写法：上层 widget 订阅
+    // MediaQuery 后，键盘弹起会触发 rebuild 并重新实例化 AppLogPanelHost 的 child。
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) {
+          final data = MediaQuery.of(context).copyWith(
+            textScaler: const TextScaler.linear(1.0),
+          );
+          return AppLogPanelHost(
+            child: MediaQuery(data: data, child: child!),
+          );
+        },
+        home: const Scaffold(body: SizedBox.expand()),
+      ),
+    );
+
+    await openPanel(tester);
+    final panelFinder = find.byKey(const Key('app_logs_bottom_panel'));
+    // 面板打开时顶部应在屏幕内（面板高度约占 85% 屏高，顶部远小于屏高）
+    final openTop = tester.getTopLeft(panelFinder).dy;
+    expect(openTop, lessThan(844));
+
+    // 模拟键盘弹起：viewInsets.bottom > 0 会触发上层 MediaQuery rebuild，
+    // 重新构造 AppLogPanelHost 的 child。修复前面板会被 didUpdateWidget 误关
+    // 并滑出屏幕底部（AnimatedPositioned bottom: -height）。
+    tester.view.viewInsets = const FakeViewPadding(bottom: 336);
+    await tester.pumpAndSettle();
+
+    // 关键断言：面板必须仍然在屏幕内（未被误关）
+    final afterKeyboardTop = tester.getTopLeft(panelFinder).dy;
+    expect(afterKeyboardTop, lessThan(844));
+  });
 }
