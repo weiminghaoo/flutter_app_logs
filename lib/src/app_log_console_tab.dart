@@ -7,8 +7,13 @@ part of 'app_logs.dart';
 class _ConsoleTab extends StatefulWidget {
   final List<AppConsoleLogEntry> entries;
   final bool showToolbar;
+  final ValueChanged<bool> onSearchFocusChange;
 
-  const _ConsoleTab({required this.entries, required this.showToolbar});
+  const _ConsoleTab({
+    required this.entries,
+    required this.showToolbar,
+    required this.onSearchFocusChange,
+  });
 
   @override
   State<_ConsoleTab> createState() => _ConsoleTabState();
@@ -25,10 +30,16 @@ class _ConsoleTabState extends State<_ConsoleTab> {
     super.initState();
     _searchController = TextEditingController();
     _searchFocusNode = FocusNode();
+    _searchFocusNode.addListener(_onSearchFocusChanged);
+  }
+
+  void _onSearchFocusChanged() {
+    widget.onSearchFocusChange(_searchFocusNode.hasFocus);
   }
 
   @override
   void dispose() {
+    _searchFocusNode.removeListener(_onSearchFocusChanged);
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();

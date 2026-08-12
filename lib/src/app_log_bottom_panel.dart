@@ -9,12 +9,14 @@ class _BottomPanel extends StatefulWidget {
   final String? selectedNetworkId;
   final ValueChanged<String?> onSelectNetwork;
   final VoidCallback onClose;
+  final ValueChanged<bool> onSearchFocusChange;
 
   const _BottomPanel({
     required this.open,
     required this.selectedNetworkId,
     required this.onSelectNetwork,
     required this.onClose,
+    required this.onSearchFocusChange,
   });
 
   @override
@@ -40,6 +42,10 @@ class _BottomPanelState extends State<_BottomPanel>
     1 => _showConsoleFilters,
     _ => _showErrorFilters,
   };
+
+  void _handleSearchFocusChange(bool focused) {
+    widget.onSearchFocusChange(focused);
+  }
 
   @override
   void initState() {
@@ -71,6 +77,9 @@ class _BottomPanelState extends State<_BottomPanel>
       _showNetworkFilters = false;
       _showConsoleFilters = false;
       _showErrorFilters = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onSearchFocusChange(false);
+      });
       _scheduleMarkErrorsReadIfVisible();
     }
   }
@@ -409,14 +418,20 @@ class _BottomPanelState extends State<_BottomPanel>
                                           selected: selected,
                                           onSelect: widget.onSelectNetwork,
                                           showToolbar: _showNetworkFilters,
+                                          onSearchFocusChange:
+                                              _handleSearchFocusChange,
                                         ),
                                         _ConsoleTab(
                                           entries: console,
                                           showToolbar: _showConsoleFilters,
+                                          onSearchFocusChange:
+                                              _handleSearchFocusChange,
                                         ),
                                         _ErrorTab(
                                           entries: errors,
                                           showToolbar: _showErrorFilters,
+                                          onSearchFocusChange:
+                                              _handleSearchFocusChange,
                                         ),
                                       ],
                                     );

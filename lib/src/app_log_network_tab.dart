@@ -70,6 +70,7 @@ class _NetworkTab extends StatefulWidget {
   final AppNetworkLogEntry? selected;
   final ValueChanged<String?> onSelect;
   final bool showToolbar;
+  final ValueChanged<bool> onSearchFocusChange;
 
   const _NetworkTab({
     required this.entries,
@@ -77,6 +78,7 @@ class _NetworkTab extends StatefulWidget {
     required this.selected,
     required this.onSelect,
     required this.showToolbar,
+    required this.onSearchFocusChange,
   });
 
   @override
@@ -97,10 +99,16 @@ class _NetworkTabState extends State<_NetworkTab> {
     super.initState();
     _searchController = TextEditingController();
     _searchFocusNode = FocusNode();
+    _searchFocusNode.addListener(_onSearchFocusChanged);
+  }
+
+  void _onSearchFocusChanged() {
+    widget.onSearchFocusChange(_searchFocusNode.hasFocus);
   }
 
   @override
   void dispose() {
+    _searchFocusNode.removeListener(_onSearchFocusChanged);
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();

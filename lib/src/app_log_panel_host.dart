@@ -68,6 +68,7 @@ class _AppLogPanelHostState extends State<AppLogPanelHost> {
   Offset? _btnPos;
   bool _isDragging = false;
   bool _isErrorCaptureAttached = false;
+  bool _searchFocused = false;
 
   static const double _btnSize = 44.0;
   static const double _btnEdge = 16.0;
@@ -89,14 +90,11 @@ class _AppLogPanelHostState extends State<AppLogPanelHost> {
     super.dispose();
   }
 
-  @override
-  void didUpdateWidget(covariant AppLogPanelHost oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.child, widget.child)) {
-      _open = false;
-      _selectedNetworkId = null;
-    }
-  }
+  // 注：不根据 child 的 identity 变化自动关闭面板。
+  // Flutter 中 widget 是一次性对象，任何上层 rebuild（键盘 viewInsets 变化、
+  // MediaQuery、主题、locale 等）都会让 child 重新实例化，!identical 恒为 true。
+  // 若据此关闭面板，会导致搜索框拉起键盘时面板被误关。关闭面板统一交给：
+  // 遮罩点击 / 浮动按钮 toggle / 关闭按钮 三条显式路径。
 
   @override
   Widget build(BuildContext context) {
@@ -192,11 +190,20 @@ class _AppLogPanelHostState extends State<AppLogPanelHost> {
         if (_open)
           Positioned.fill(
             child: GestureDetector(
-              onTap:
-                  () => setState(() {
-                    _open = false;
-                    _selectedNetworkId = null;
-                  }),
+              onTap: () {
+                // 搜索框已获焦或键盘可见时，只收起键盘不关闭面板；
+                // 避免键盘弹出/收起时布局变化导致遮罩层误触 tap 关闭面板
+                final keyboardHeight =
+                    MediaQuery.of(context).viewInsets.bottom;
+                if (keyboardHeight > 0 || _searchFocused) {
+                  FocusScope.of(context).unfocus();
+                  return;
+                }
+                setState(() {
+                  _open = false;
+                  _selectedNetworkId = null;
+                });
+              },
               behavior: HitTestBehavior.opaque,
               child: Container(color: Colors.black.withValues(alpha: 0.4)),
             ),
@@ -208,10 +215,13 @@ class _AppLogPanelHostState extends State<AppLogPanelHost> {
             open: _open,
             selectedNetworkId: _selectedNetworkId,
             onSelectNetwork: (id) => setState(() => _selectedNetworkId = id),
+            onSearchFocusChange: (focused) =>
+                setState(() => _searchFocused = focused),
             onClose:
                 () => setState(() {
                   _open = false;
                   _selectedNetworkId = null;
+                  _searchFocused = false;
                 }),
           ),
         ),
