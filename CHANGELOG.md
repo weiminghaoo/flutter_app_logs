@@ -1,3 +1,9 @@
+## 0.2.2
+
+- **fix**: The debug panel now stays open when `AppLogPanelHost.child` is rebuilt by keyboard `viewInsets`, `MediaQuery`, theme, locale, or other ancestor updates. Panel closing is limited to explicit user actions, and search focus is tracked to avoid mask-layer closes during keyboard transitions.
+- **test**: Added a widget regression test that rebuilds a `MediaQuery`-dependent child while simulating the soft keyboard.
+- **thanks**: Thanks to [@weiminghaoo](https://github.com/weiminghaoo) for the detailed root-cause analysis and the fix contributed in [#2](https://github.com/wildcatDownstairs/flutter_app_logs/pull/2).
+
 ## 0.2.1
 
 - **fix**: Wrapped structured Console log `ExpansionTile` cards in their own transparent `Material`, preventing Flutter 3.44+ from repeatedly reporting hidden `ListTile` backgrounds and ink splashes.
